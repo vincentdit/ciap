@@ -1,0 +1,33 @@
+# Test profile: in-memory H2, Hibernate creates the schema (Flyway disabled),
+# so MySQL-specific migration DDL is not replayed against H2.
+spring:
+  datasource:
+    url: jdbc:h2:mem:ciap_test;DB_CLOSE_DELAY=-1;MODE=MySQL;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        format_sql: false
+    show-sql: false
+  flyway:
+    enabled: false
+
+ciap:
+  security:
+    jwt:
+      secret: dGVzdC1zZWNyZXQta2V5LWZvci1jaWFwLXVuaXQtdGVzdHMtMzJieXRlcy1taW4=
+      access-token-ttl-minutes: 30
+      refresh-token-ttl-days: 7
+      issuer: ciap.test
+  bootstrap:
+    admin-email: admin@test.local
+    admin-password: Admin@Test123
+
+logging:
+  level:
+    org.springframework: WARN
+    org.hibernate: WARN

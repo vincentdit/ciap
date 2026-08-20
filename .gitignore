@@ -1,0 +1,26 @@
+# Secrets ? NEVER commit
+.env
+*.env
+!.env.example
+
+# Backend build output
+ciap-backend/target/
+*.class
+
+# Frontend build + deps
+ciap-frontend/node_modules/
+ciap-frontend/dist/
+ciap-frontend/.angular/
+
+# Uploaded documents (runtime data)
+ciap-documents/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

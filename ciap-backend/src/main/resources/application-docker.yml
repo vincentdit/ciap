@@ -1,0 +1,32 @@
+# ============================================================
+# Spring profile: docker
+# Activated by SPRING_PROFILES_ACTIVE=docker in docker-compose.
+# Binds datasource + secrets from environment variables passed
+# by compose, so the container config is explicit and self-contained.
+# ============================================================
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+server:
+  port: 8080
+  # Keep whatever context-path the app already defines (e.g. /api).
+
+# App-specific config bound from env.
+ciap:
+  storage:
+    root: ${CIAP_STORAGE_ROOT:/var/lib/ciap/documents}

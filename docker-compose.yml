@@ -1,0 +1,55 @@
+services:
+  db:
+    image: mysql:8.4
+    container_name: ciap-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    
+    volumes:
+      - ciap-db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  backend:
+    build:
+      context: ./ciap-backend
+    container_name: ciap-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+      CIAP_JWT_SECRET: ${CIAP_JWT_SECRET}
+      CIAP_STORAGE_ROOT: /var/lib/ciap/documents
+      CIAP_ADMIN_EMAIL: ${CIAP_ADMIN_EMAIL}
+      CIAP_ADMIN_PASSWORD: ${CIAP_ADMIN_PASSWORD}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ciap-docs:/var/lib/ciap/documents
+
+  frontend:
+    build:
+      context: ./ciap-frontend
+    container_name: ciap-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8088:80"
+
+volumes:
+  ciap-db-data:
+  ciap-docs:
