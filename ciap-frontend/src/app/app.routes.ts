@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
+import { staffGuard } from './core/guards/staff.guard';
 
 export const routes: Routes = [
   {
@@ -30,26 +31,32 @@ export const routes: Routes = [
       },
       {
         path: 'staff/requests',
+        canActivate: [staffGuard],
         loadComponent: () => import('./features/staff/staff-queue.component').then(m => m.StaffQueueComponent)
       },
       {
         path: 'staff/requests/:id',
+        canActivate: [staffGuard],
         loadComponent: () => import('./features/staff/request-detail.component').then(m => m.RequestDetailComponent)
       },
       {
         path: 'staff/requests/:id/quote',
+        canActivate: [staffGuard],
         loadComponent: () => import('./features/staff/quotation-builder.component').then(m => m.QuotationBuilderComponent)
       },
       {
         path: 'staff/requests/:id/project-new',
+        canActivate: [staffGuard],
         loadComponent: () => import('./features/staff/project-new.component').then(m => m.ProjectNewComponent)
       },
       {
         path: 'staff/projects/:id',
+        canActivate: [staffGuard],
         loadComponent: () => import('./features/staff/project-workspace.component').then(m => m.ProjectWorkspaceComponent)
       },
       {
         path: 'staff/consultants',
+        canActivate: [staffGuard],
         loadComponent: () => import('./features/staff/consultants.component').then(m => m.ConsultantsComponent)
       },
       {

@@ -38,6 +38,15 @@ public class User extends Auditable {
     @Builder.Default
     private boolean mfaEnabled = false;
 
+    /** Incremented on logout so previously issued tokens stop being accepted. */
+    @Column(name = "token_version", nullable = false)
+    @Builder.Default
+    private int tokenVersion = 0;
+
+    /** Identifier of the single refresh token that may still be exchanged. */
+    @Column(name = "refresh_token_id", length = 64)
+    private String refreshTokenId;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_roles",

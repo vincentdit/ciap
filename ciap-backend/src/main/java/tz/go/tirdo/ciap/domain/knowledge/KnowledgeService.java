@@ -6,14 +6,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tz.go.tirdo.ciap.common.exception.ResourceNotFoundException;
 import tz.go.tirdo.ciap.domain.knowledge.dto.CreateArticleRequest;
+import tz.go.tirdo.ciap.security.AccessGuard;
 
 @Service
 public class KnowledgeService {
 
     private final KnowledgeArticleRepository repository;
+    private final AccessGuard accessGuard;
 
-    public KnowledgeService(KnowledgeArticleRepository repository) {
+    public KnowledgeService(KnowledgeArticleRepository repository, AccessGuard accessGuard) {
         this.repository = repository;
+        this.accessGuard = accessGuard;
     }
 
     @Transactional
@@ -48,8 +51,12 @@ public class KnowledgeService {
 
     @Transactional(readOnly = true)
     public KnowledgeArticle getById(Long id) {
-        return repository.findById(id)
+        KnowledgeArticle article = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Article", id));
+        if (!article.isPublished() && accessGuard.current().kind() == AccessGuard.Kind.CLIENT) {
+            throw new ResourceNotFoundException("Article", id);
+        }
+        return article;
     }
 
     @Transactional(readOnly = true)

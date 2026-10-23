@@ -53,14 +53,12 @@ docker compose up -d
 open http://localhost:8080/api/swagger-ui.html
 ```
 
-On first start a default admin is created and logged to the console:
-
-```
-admin@tirdo.go.tz / Admin@12345     # CHANGE IMMEDIATELY
-```
-
-Override via `.env` (see `.env.example`) or env vars
-`CIAP_BOOTSTRAP_ADMIN_EMAIL`, `CIAP_BOOTSTRAP_ADMIN_PASSWORD`, `CIAP_JWT_SECRET`.
+On first start, if the database has no users, an administrator is created from
+`CIAP_BOOTSTRAP_ADMIN_EMAIL` and `CIAP_BOOTSTRAP_ADMIN_PASSWORD`. The password
+is not written to the log. The docker profile will not create that account
+when the password is still the built-in development default, and it will not
+start with the development JWT fallback. Set `CIAP_JWT_SECRET` from
+`.env.example` before a shared deployment.
 
 ## Authentication flow
 
@@ -68,7 +66,7 @@ Override via `.env` (see `.env.example`) or env vars
 # Login (public)
 curl -X POST http://localhost:8080/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"admin@tirdo.go.tz","password":"Admin@12345"}'
+  -d '{"email":"<admin-email>","password":"<admin-password>"}'
 # -> { data: { accessToken, refreshToken, ... } }
 
 # Refresh when the access token expires (public)

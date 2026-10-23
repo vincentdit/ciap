@@ -8,17 +8,21 @@ import tz.go.tirdo.ciap.common.exception.BusinessException;
 import tz.go.tirdo.ciap.common.exception.DuplicateResourceException;
 import tz.go.tirdo.ciap.common.exception.ResourceNotFoundException;
 import tz.go.tirdo.ciap.domain.training.dto.CreateEventRequest;
+import tz.go.tirdo.ciap.security.AccessGuard;
 
 @Service
 public class TrainingService {
 
     private final TrainingEventRepository eventRepository;
     private final TrainingRegistrationRepository registrationRepository;
+    private final AccessGuard accessGuard;
 
     public TrainingService(TrainingEventRepository eventRepository,
-                           TrainingRegistrationRepository registrationRepository) {
+                           TrainingRegistrationRepository registrationRepository,
+                           AccessGuard accessGuard) {
         this.eventRepository = eventRepository;
         this.registrationRepository = registrationRepository;
+        this.accessGuard = accessGuard;
     }
 
     @Transactional
@@ -59,8 +63,12 @@ public class TrainingService {
 
     @Transactional(readOnly = true)
     public TrainingEvent getById(Long id) {
-        return eventRepository.findById(id)
+        TrainingEvent event = eventRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Training event", id));
+        if (!event.isPublished() && accessGuard.current().kind() == AccessGuard.Kind.CLIENT) {
+            throw new ResourceNotFoundException("Training event", id);
+        }
+        return event;
     }
 
     @Transactional(readOnly = true)
@@ -86,6 +94,9 @@ public class TrainingService {
     @Transactional
     public void register(Long eventId, String email) {
         TrainingEvent e = getById(eventId);
+        if (!e.isPublished()) {
+            throw new ResourceNotFoundException("Training event", eventId);
+        }
         if (registrationRepository.existsByEventIdAndRegistrantEmail(eventId, email)) {
             throw new DuplicateResourceException("You are already registered for this event");
         }

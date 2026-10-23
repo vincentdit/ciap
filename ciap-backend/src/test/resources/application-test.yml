@@ -17,7 +17,12 @@ spring:
     enabled: false
 
 ciap:
+  storage:
+    root: target/test-documents
   security:
+    expose-api-docs: false
+    auth-rate-limit: 1000
+    auth-rate-window-seconds: 60
     jwt:
       secret: dGVzdC1zZWNyZXQta2V5LWZvci1jaWFwLXVuaXQtdGVzdHMtMzJieXRlcy1taW4=
       access-token-ttl-minutes: 30

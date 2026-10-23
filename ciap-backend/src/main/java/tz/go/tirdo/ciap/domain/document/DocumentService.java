@@ -6,9 +6,12 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.MediaType;
+import tz.go.tirdo.ciap.common.exception.BusinessException;
 import tz.go.tirdo.ciap.common.exception.ResourceNotFoundException;
 import tz.go.tirdo.ciap.domain.consultancy.ConsultancyRequest;
 import tz.go.tirdo.ciap.domain.consultancy.ConsultancyRequestRepository;
+import tz.go.tirdo.ciap.security.AccessGuard;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -17,6 +20,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -29,16 +33,39 @@ import java.util.UUID;
 public class DocumentService {
 
     private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
+    private static final long MAX_BYTES = 25L * 1024 * 1024;
+
+    private static final Map<String, String> ALLOWED_TYPES = Map.ofEntries(
+            Map.entry("pdf", MediaType.APPLICATION_PDF_VALUE),
+            Map.entry("png", MediaType.IMAGE_PNG_VALUE),
+            Map.entry("jpg", MediaType.IMAGE_JPEG_VALUE),
+            Map.entry("jpeg", MediaType.IMAGE_JPEG_VALUE),
+            Map.entry("gif", MediaType.IMAGE_GIF_VALUE),
+            Map.entry("webp", "image/webp"),
+            Map.entry("txt", MediaType.TEXT_PLAIN_VALUE),
+            Map.entry("csv", "text/csv"),
+            Map.entry("doc", "application/msword"),
+            Map.entry("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            Map.entry("xls", "application/vnd.ms-excel"),
+            Map.entry("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            Map.entry("ppt", "application/vnd.ms-powerpoint"),
+            Map.entry("pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+            Map.entry("odt", "application/vnd.oasis.opendocument.text"),
+            Map.entry("ods", "application/vnd.oasis.opendocument.spreadsheet")
+    );
 
     private final DocumentRepository documentRepository;
     private final ConsultancyRequestRepository requestRepository;
+    private final AccessGuard accessGuard;
     private final Path storageRoot;
 
     public DocumentService(DocumentRepository documentRepository,
                            ConsultancyRequestRepository requestRepository,
-                           StorageProperties props) {
+                           StorageProperties props,
+                           AccessGuard accessGuard) {
         this.documentRepository = documentRepository;
         this.requestRepository = requestRepository;
+        this.accessGuard = accessGuard;
         this.storageRoot = Paths.get(props.root()).toAbsolutePath().normalize();
         try {
             Files.createDirectories(storageRoot);
@@ -51,19 +78,29 @@ public class DocumentService {
     @Transactional
     public Document store(Long requestId, DocumentCategory category, String description, MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("File is empty");
+            throw new BusinessException("File is empty");
+        }
+        if (file.getSize() > MAX_BYTES) {
+            throw new BusinessException("File exceeds the 25 MB limit");
         }
         ConsultancyRequest request = requestRepository.findById(requestId)
                 .orElseThrow(() -> new ResourceNotFoundException("ConsultancyRequest", requestId));
+        accessGuard.assertCanReadRequest(request);
 
         String original = sanitize(file.getOriginalFilename());
         String ext = extensionOf(original);
+        if (!ALLOWED_TYPES.containsKey(ext)) {
+            throw new BusinessException("This file type is not allowed");
+        }
+        if (description != null && description.length() > 500) {
+            throw new BusinessException("Description is too long");
+        }
         String stored = UUID.randomUUID() + (ext.isEmpty() ? "" : "." + ext);
         Path target = storageRoot.resolve(stored).normalize();
 
         // Guard against path traversal: target must remain under the root.
         if (!target.startsWith(storageRoot)) {
-            throw new IllegalArgumentException("Invalid storage path");
+            throw new BusinessException("Invalid storage path");
         }
 
         try {
@@ -77,7 +114,7 @@ public class DocumentService {
                 .category(category != null ? category : DocumentCategory.OTHER)
                 .originalFilename(original)
                 .storedFilename(stored)
-                .contentType(file.getContentType())
+                .contentType(ALLOWED_TYPES.get(ext))
                 .sizeBytes(file.getSize())
                 .description(description)
                 .build();
@@ -86,13 +123,37 @@ public class DocumentService {
 
     @Transactional(readOnly = true)
     public List<Document> listForRequest(Long requestId) {
-        return documentRepository.findByRequestIdOrderByCreatedAtDesc(requestId);
+        ConsultancyRequest request = requestRepository.findById(requestId)
+                .orElseThrow(() -> new ResourceNotFoundException("ConsultancyRequest", requestId));
+        accessGuard.assertCanReadRequest(request);
+        List<Document> documents = documentRepository.findByRequestIdOrderByCreatedAtDesc(requestId);
+        documents.forEach(document -> document.getRequest().getReferenceNo());
+        return documents;
     }
 
     @Transactional(readOnly = true)
     public Document getMetadata(Long id) {
-        return documentRepository.findById(id)
+        Document document = documentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Document", id));
+        accessGuard.assertCanReadRequest(document.getRequest());
+        return document;
+    }
+
+    /** Media type derived from the stored extension, never from the client header. */
+    public MediaType downloadMediaType(Document doc) {
+        String type = ALLOWED_TYPES.get(extensionOf(doc.getStoredFilename()));
+        return MediaType.parseMediaType(type != null ? type : MediaType.APPLICATION_OCTET_STREAM_VALUE);
+    }
+
+    /** Attachment disposition that cannot break out of the header. */
+    public String contentDisposition(Document doc) {
+        String cleaned = doc.getOriginalFilename() == null ? "download" : doc.getOriginalFilename();
+        cleaned = cleaned.replaceAll("[\\r\\n\"]", "");
+        String ascii = cleaned.replaceAll("[^A-Za-z0-9._ -]", "_");
+        if (ascii.isBlank()) {
+            ascii = "download";
+        }
+        return "attachment; filename=\"" + ascii + "\"";
     }
 
     /** Resolve the on-disk path for a document, verifying it stays under the root. */
@@ -115,7 +176,7 @@ public class DocumentService {
     private String extensionOf(String name) {
         int dot = name.lastIndexOf('.');
         if (dot < 0 || dot == name.length() - 1) return "";
-        String ext = name.substring(dot + 1);
-        return ext.matches("[A-Za-z0-9]{1,10}") ? ext : "";
+        String ext = name.substring(dot + 1).toLowerCase();
+        return ext.matches("[a-z0-9]{1,10}") ? ext : "";
     }
 }

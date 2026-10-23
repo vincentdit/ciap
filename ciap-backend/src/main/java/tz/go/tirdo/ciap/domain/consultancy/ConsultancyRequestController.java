@@ -35,7 +35,7 @@ public class ConsultancyRequestController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('MANAGER','ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('CLIENT','EXPERT','MANAGER','ADMIN','FINANCE')")
     public ResponseEntity<ApiResponse<PageResponse<RequestResponse>>> list(
             @RequestParam(required = false) RequestStatus status, Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(service.list(status, pageable))));

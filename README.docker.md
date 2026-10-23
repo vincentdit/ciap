@@ -35,8 +35,12 @@ compiles both apps). When it settles, open:
 - **API:**      http://localhost:8080/api  (direct, for testing)
 - **MySQL:**    localhost:3307 (user/pass from `.env`)
 
-Sign in with `admin@tirdo.go.tz` / `Admin@12345` (unless you changed the admin
-env vars and your DataInitializer reads them).
+Sign in with the bootstrap administrator from your uncommitted `.env`
+(`CIAP_ADMIN_EMAIL` / `CIAP_ADMIN_PASSWORD`). The docker profile refuses to
+create that first account when the password is still the historical development
+default, and it refuses to start when `CIAP_JWT_SECRET` is missing or is the
+development fallback from `application.yml`. Generate a secret with
+`openssl rand -base64 48` and put it only in `.env`.
 
 Stop with `Ctrl+C`; to also remove containers: `docker compose down`.
 To wipe the database and start fresh: `docker compose down -v` (the `-v` drops

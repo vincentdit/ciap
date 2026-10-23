@@ -30,3 +30,13 @@ server:
 ciap:
   storage:
     root: ${CIAP_STORAGE_ROOT:/var/lib/ciap/documents}
+  security:
+    expose-api-docs: false
+    trust-proxy: true
+    cors-allowed-origins: ${CIAP_CORS_ORIGINS:http://localhost:4200,http://localhost:8088}
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

@@ -5,7 +5,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import tz.go.tirdo.ciap.common.dto.ApiResponse;
+import org.springframework.security.core.Authentication;
 import tz.go.tirdo.ciap.domain.user.dto.AuthResponse;
+import tz.go.tirdo.ciap.domain.user.dto.ChangePasswordRequest;
 import tz.go.tirdo.ciap.domain.user.dto.LoginRequest;
 import tz.go.tirdo.ciap.domain.user.dto.RefreshTokenRequest;
 import tz.go.tirdo.ciap.domain.user.dto.RegisterUserRequest;
@@ -31,8 +33,22 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.ok(authService.refresh(request)));
     }
 
-    /** Internal staff provisioning — ADMIN only. Note: /auth/** is permitted at filter level,
-     *  but method security enforces ADMIN here. */
+    /** Replaces the caller's password and revokes existing tokens. */
+    @PostMapping("/change-password")
+    public ResponseEntity<ApiResponse<Void>> changePassword(Authentication authentication,
+                                                            @Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(authentication.getName(), request);
+        return ResponseEntity.ok(ApiResponse.message("Password updated. Sign in again."));
+    }
+
+    /** Revokes the caller's access and refresh tokens. */
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(Authentication authentication) {
+        authService.logout(authentication.getName());
+        return ResponseEntity.ok(ApiResponse.message("Signed out"));
+    }
+
+    /** Internal staff provisioning — ADMIN only. */
     @PostMapping("/staff")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<UserResponse>> registerStaff(@Valid @RequestBody RegisterUserRequest request) {

@@ -12,7 +12,9 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const router = inject(Router);
 
-  const isAuthCall = req.url.includes('/auth/login') || req.url.includes('/auth/refresh');
+  const isAuthCall = req.url.includes('/auth/login')
+    || req.url.includes('/auth/refresh')
+    || req.url.includes('/auth/logout');
   const token = auth.accessToken;
 
   const decorated = (token && !isAuthCall)

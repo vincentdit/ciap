@@ -61,12 +61,10 @@ public class DocumentController {
         Path path = documentService.resolveContent(doc);
         try {
             Resource resource = new InputStreamResource(Files.newInputStream(path));
-            String contentType = doc.getContentType() != null ? doc.getContentType()
-                    : MediaType.APPLICATION_OCTET_STREAM_VALUE;
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=\"" + doc.getOriginalFilename() + "\"")
-                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, documentService.contentDisposition(doc))
+                    .header("X-Content-Type-Options", "nosniff")
+                    .contentType(documentService.downloadMediaType(doc))
                     .contentLength(doc.getSizeBytes())
                     .body(resource);
         } catch (IOException e) {

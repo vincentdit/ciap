@@ -11,6 +11,7 @@ import tz.go.tirdo.ciap.domain.billing.dto.QuotationResponse;
 import tz.go.tirdo.ciap.domain.consultancy.ConsultancyRequest;
 import tz.go.tirdo.ciap.domain.consultancy.ConsultancyRequestRepository;
 import tz.go.tirdo.ciap.domain.consultancy.RequestStatus;
+import tz.go.tirdo.ciap.security.AccessGuard;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -28,15 +29,18 @@ public class QuotationService {
     private final ContractRepository contractRepository;
     private final ConsultancyRequestRepository requestRepository;
     private final tz.go.tirdo.ciap.common.sequence.ReferenceNumberService referenceNumbers;
+    private final AccessGuard accessGuard;
 
     public QuotationService(QuotationRepository quotationRepository,
                             ContractRepository contractRepository,
                             ConsultancyRequestRepository requestRepository,
-                            tz.go.tirdo.ciap.common.sequence.ReferenceNumberService referenceNumbers) {
+                            tz.go.tirdo.ciap.common.sequence.ReferenceNumberService referenceNumbers,
+                            AccessGuard accessGuard) {
         this.quotationRepository = quotationRepository;
         this.contractRepository = contractRepository;
         this.requestRepository = requestRepository;
         this.referenceNumbers = referenceNumbers;
+        this.accessGuard = accessGuard;
     }
 
     @Transactional
@@ -97,6 +101,7 @@ public class QuotationService {
     @Transactional
     public ContractResponse accept(Long quotationId) {
         Quotation q = getEntity(quotationId);
+        accessGuard.assertCanReadRequest(q.getRequest());
         if (q.getStatus() != QuotationStatus.SENT) {
             throw new BusinessException("Only a SENT quotation can be accepted (current: " + q.getStatus() + ")");
         }
@@ -122,11 +127,16 @@ public class QuotationService {
 
     @Transactional(readOnly = true)
     public QuotationResponse get(Long quotationId) {
-        return QuotationResponse.from(getEntity(quotationId));
+        Quotation quotation = getEntity(quotationId);
+        accessGuard.assertCanReadRequest(quotation.getRequest());
+        return QuotationResponse.from(quotation);
     }
 
     @Transactional(readOnly = true)
     public List<QuotationResponse> listForRequest(Long requestId) {
+        ConsultancyRequest request = requestRepository.findById(requestId)
+                .orElseThrow(() -> new ResourceNotFoundException("ConsultancyRequest", requestId));
+        accessGuard.assertCanReadRequest(request);
         return quotationRepository.findByRequestIdOrderByIdDesc(requestId)
                 .stream().map(QuotationResponse::from).toList();
     }

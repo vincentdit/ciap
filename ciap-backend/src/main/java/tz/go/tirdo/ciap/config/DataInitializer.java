@@ -44,9 +44,7 @@ public class DataInitializer implements CommandLineRunner {
         }
         userService.createUser(adminEmail, adminPassword, "System Administrator", null,
                 Set.of(RoleName.ADMIN));
-        log.warn("=================================================================");
-        log.warn(" Default ADMIN created: {} / {}", adminEmail, adminPassword);
-        log.warn(" CHANGE THIS PASSWORD IMMEDIATELY IN PRODUCTION.");
-        log.warn("=================================================================");
+        log.warn("Default administrator account created for {}. Change that password before any shared deployment.",
+                adminEmail);
     }
 }

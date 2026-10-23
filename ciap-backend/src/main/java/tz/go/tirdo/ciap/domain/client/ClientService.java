@@ -30,10 +30,12 @@ public class ClientService {
     @Transactional
     public Client register(ClientRegistrationRequest req) {
         if (userRepository.existsByEmail(req.email())) {
-            throw new DuplicateResourceException("Email already registered: " + req.email());
+            throw new DuplicateResourceException(
+                    "Registration could not be completed with the details provided");
         }
         if (req.tin() != null && !req.tin().isBlank() && clientRepository.existsByTin(req.tin())) {
-            throw new DuplicateResourceException("TIN already registered: " + req.tin());
+            throw new DuplicateResourceException(
+                    "Registration could not be completed with the details provided");
         }
 
         User user = userService.createUser(

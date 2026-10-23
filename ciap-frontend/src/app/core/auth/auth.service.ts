@@ -41,10 +41,14 @@ export class AuthService {
   }
 
   logout(): void {
-    localStorage.removeItem(ACCESS_KEY);
-    localStorage.removeItem(REFRESH_KEY);
-    localStorage.removeItem(SESSION_KEY);
-    this._session.set(null);
+    const token = this.accessToken;
+    this.clearStoredSession();
+    if (!token) {
+      return;
+    }
+    this.http.post(`${this.base}/auth/logout`, {}, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).subscribe({ error: () => undefined });
   }
 
   get accessToken(): string | null {
@@ -61,6 +65,13 @@ export class AuthService {
     return wanted.some(w =>
       mine.includes(w) || mine.includes(`ROLE_${w}`) ||
       mine.map(r => r.replace(/^ROLE_/, '')).includes(w));
+  }
+
+  private clearStoredSession(): void {
+    localStorage.removeItem(ACCESS_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+    localStorage.removeItem(SESSION_KEY);
+    this._session.set(null);
   }
 
   private store(auth: AuthResponse): void {

@@ -131,17 +131,26 @@ export class LoginComponent {
     this.loading.set(true);
     this.auth.login(this.form.getRawValue()).subscribe({
       next: () => {
-        const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl') || '/dashboard';
+        const returnUrl = safeInternalPath(this.route.snapshot.queryParamMap.get('returnUrl'));
         this.router.navigateByUrl(returnUrl);
       },
       error: (err) => {
         this.loading.set(false);
         this.error.set(
-          err?.status === 401 || err?.status === 403
+          err?.status === 429
+            ? 'Too many sign-in attempts. Wait a minute and try again.'
+            : err?.status === 401 || err?.status === 403
             ? 'Invalid email or password.'
             : 'Unable to sign in. Please check your connection and try again.'
         );
       }
     });
   }
+}
+
+function safeInternalPath(raw: string | null): string {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\') || raw.includes('://')) {
+    return '/dashboard';
+  }
+  return raw;
 }

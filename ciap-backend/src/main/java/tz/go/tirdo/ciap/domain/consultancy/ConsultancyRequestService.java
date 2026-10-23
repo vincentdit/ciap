@@ -14,6 +14,7 @@ import tz.go.tirdo.ciap.domain.consultancy.dto.RequestResponse;
 import tz.go.tirdo.ciap.domain.consultancy.dto.ReviewDto;
 import tz.go.tirdo.ciap.domain.consultant.Consultant;
 import tz.go.tirdo.ciap.domain.consultant.ConsultantService;
+import tz.go.tirdo.ciap.security.AccessGuard;
 
 
 /**
@@ -28,20 +29,28 @@ public class ConsultancyRequestService {
     private final ClientService clientService;
     private final ConsultantService consultantService;
     private final tz.go.tirdo.ciap.common.sequence.ReferenceNumberService referenceNumbers;
+    private final AccessGuard accessGuard;
 
     public ConsultancyRequestService(ConsultancyRequestRepository repository,
                                      ClientService clientService,
                                      ConsultantService consultantService,
-                                     tz.go.tirdo.ciap.common.sequence.ReferenceNumberService referenceNumbers) {
+                                     tz.go.tirdo.ciap.common.sequence.ReferenceNumberService referenceNumbers,
+                                     AccessGuard accessGuard) {
         this.repository = repository;
         this.clientService = clientService;
         this.consultantService = consultantService;
         this.referenceNumbers = referenceNumbers;
+        this.accessGuard = accessGuard;
     }
 
     @Transactional
     public RequestResponse submit(CreateRequestDto dto) {
-        Client client = clientService.getById(dto.clientId());
+        Long clientId = dto.clientId();
+        AccessGuard.Actor actor = accessGuard.current();
+        if (actor.kind() == AccessGuard.Kind.CLIENT) {
+            clientId = clientService.getByUserEmail(actor.email()).getId();
+        }
+        Client client = clientService.getById(clientId);
         ConsultancyRequest request = ConsultancyRequest.builder()
                 .referenceNo(generateReference())
                 .client(client)
@@ -98,6 +107,7 @@ public class ConsultancyRequestService {
     @Transactional
     public RequestResponse startExecution(Long id) {
         ConsultancyRequest r = getEntity(id);
+        accessGuard.assertCanReadRequest(r);
         if (r.getAssignedConsultant() == null) {
             throw new BusinessException("Cannot start execution without an assigned consultant");
         }
@@ -108,6 +118,7 @@ public class ConsultancyRequestService {
     @Transactional
     public RequestResponse submitReport(Long id) {
         ConsultancyRequest r = getEntity(id);
+        accessGuard.assertCanReadRequest(r);
         transition(r, RequestStatus.REPORT_SUBMITTED);
         return RequestResponse.from(r);
     }
@@ -127,6 +138,7 @@ public class ConsultancyRequestService {
     @Transactional
     public RequestResponse cancel(Long id) {
         ConsultancyRequest r = getEntity(id);
+        accessGuard.assertCanReadRequest(r);
         boolean hadConsultant = r.getAssignedConsultant() != null;
         Long consultantId = hadConsultant ? r.getAssignedConsultant().getId() : null;
         transition(r, RequestStatus.CANCELLED);
@@ -138,14 +150,28 @@ public class ConsultancyRequestService {
 
     @Transactional(readOnly = true)
     public RequestResponse get(Long id) {
-        return RequestResponse.from(getEntity(id));
+        ConsultancyRequest request = getEntity(id);
+        accessGuard.assertCanReadRequest(request);
+        return RequestResponse.from(request);
     }
 
     @Transactional(readOnly = true)
     public Page<RequestResponse> list(RequestStatus status, Pageable pageable) {
-        Page<ConsultancyRequest> page = (status == null)
-                ? repository.findAll(pageable)
-                : repository.findByStatus(status, pageable);
+        AccessGuard.Actor actor = accessGuard.current();
+        Page<ConsultancyRequest> page;
+        if (actor.kind() == AccessGuard.Kind.CLIENT) {
+            page = (status == null)
+                    ? repository.findByClient_User_EmailIgnoreCase(actor.email(), pageable)
+                    : repository.findByClient_User_EmailIgnoreCaseAndStatus(actor.email(), status, pageable);
+        } else if (actor.kind() == AccessGuard.Kind.EXPERT) {
+            page = (status == null)
+                    ? repository.findByAssignedConsultant_User_EmailIgnoreCase(actor.email(), pageable)
+                    : repository.findByAssignedConsultant_User_EmailIgnoreCaseAndStatus(actor.email(), status, pageable);
+        } else {
+            page = (status == null)
+                    ? repository.findAll(pageable)
+                    : repository.findByStatus(status, pageable);
+        }
         return page.map(RequestResponse::from);
     }
 

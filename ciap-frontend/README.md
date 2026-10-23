@@ -31,14 +31,14 @@ calls work too.)
 
 Then open http://localhost:4200.
 
-- Sign in with the seeded admin (`admin@tirdo.go.tz` / `Admin@12345`) or
+- Sign in with the administrator created from the backend bootstrap settings, or
 - Register a new client organisation at `/register`, then sign in.
 
 ## How it connects to the backend
 
 - `environment.development.ts` / `environment.ts` set `apiBaseUrl` to `/api`.
 - The auth interceptor attaches `Authorization: Bearer <token>` to every API
-  call except `/auth/login` and `/auth/refresh`, and on a 401 it refreshes the
+  call except `/auth/login`, `/auth/refresh`, and `/auth/logout`, and on a 401 it refreshes the
   token once and retries.
 - TypeScript models in `core/models/api.models.ts` mirror the backend DTOs
   (`ApiResponse` envelope, `PageResponse`, auth, client, request).

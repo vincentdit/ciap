@@ -11,6 +11,8 @@ services:
     
     volumes:
       - ciap-db-data:/var/lib/mysql
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
@@ -35,8 +37,10 @@ services:
       CIAP_STORAGE_ROOT: /var/lib/ciap/documents
       CIAP_ADMIN_EMAIL: ${CIAP_ADMIN_EMAIL}
       CIAP_ADMIN_PASSWORD: ${CIAP_ADMIN_PASSWORD}
-    ports:
-      - "8080:8080"
+      CIAP_BOOTSTRAP_ADMIN_EMAIL: ${CIAP_ADMIN_EMAIL}
+      CIAP_BOOTSTRAP_ADMIN_PASSWORD: ${CIAP_ADMIN_PASSWORD}
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ciap-docs:/var/lib/ciap/documents
 
@@ -47,6 +51,8 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "8088:80"
 
