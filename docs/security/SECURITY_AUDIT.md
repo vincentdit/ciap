@@ -31,7 +31,7 @@ Sensitive data present in the model: organisation identity and TIN, contact deta
 | CIAP-07 | Medium | Confirmed | Fixed | Uploads trusted the client filename and content type, and the download header reflected the original filename. |
 | CIAP-08 | Medium | Confirmed | Fixed | Any authenticated user, including a client, could read unpublished knowledge articles and training events by id, and could register for an unpublished event. |
 | CIAP-09 | Medium | Confirmed | Fixed | `returnUrl` after login was passed to `navigateByUrl` without checking that it was a same-app path. |
-| CIAP-10 | Medium | Confirmed | Fixed | Nginx and the API did not send clickjacking, content-type, referrer, or content-security headers. HSTS is not set: this stack is served over HTTP. |
+| CIAP-10 | Medium | Confirmed | Partial | Nginx sends clickjacking, content-type, and referrer headers. The page content security policy was removed because it blocked the existing fonts and left the stylesheet in print mode. The API still sends a content security policy. HSTS is not set: this stack is served over HTTP. |
 | CIAP-11 | Medium | Confirmed | Fixed | Clients were forbidden from listing requests, so their own dashboard could not load, while fetch-by-id was open. Listing is now allowed and filtered to the caller. |
 | CIAP-12 | Low | Confirmed | Mitigated | Public registration returned a message that included the email or TIN. The message is now generic. HTTP 409 still differs from success. |
 | CIAP-13 | Medium | Confirmed | Open | `POST /payments/gepg-callback` lets finance or admin mark a payment paid. The staff UI calls it. There is no GePG signature. A shared secret in the Angular bundle would not be a secret. |

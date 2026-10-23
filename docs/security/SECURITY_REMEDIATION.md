@@ -29,7 +29,7 @@ Changes stay inside the existing Spring Boot and Angular design. Staff workflow 
 
 - Allowed extensions: pdf, png, jpg, jpeg, gif, webp, txt, csv, and common Office/OpenDocument types. Executables, HTML, and SVG are rejected. Stored names stay random. The stored content type comes from the extension.
 - Downloads use `Content-Disposition: attachment` with a stripped filename and `X-Content-Type-Options: nosniff`.
-- Nginx sends a content security policy, frame denial, nosniff, and a referrer policy. `style-src` allows inline styles because the Angular build emits them. `connect-src` is `'self'` because the API is proxied on the same origin. HSTS is intentionally absent on this HTTP deployment.
+- Nginx sends frame denial, nosniff, and a referrer policy. A page content security policy was removed because it blocked the existing Google fonts and left the main stylesheet in print mode, which stripped the layout. HSTS is intentionally absent on this HTTP deployment.
 - The API sends nosniff, frame denial, referrer `no-referrer`, and a strict content security policy for JSON responses.
 - Login ignores a `returnUrl` that is not a single-slash application path.
 - Logout calls `POST /auth/logout` before dropping local tokens.
