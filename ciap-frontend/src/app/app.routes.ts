@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { staffGuard } from './core/guards/staff.guard';
+import { adminGuard } from './core/guards/admin.guard';
 
 export const routes: Routes = [
   {
@@ -58,6 +59,11 @@ export const routes: Routes = [
         path: 'staff/consultants',
         canActivate: [staffGuard],
         loadComponent: () => import('./features/staff/consultants.component').then(m => m.ConsultantsComponent)
+      },
+      {
+        path: 'staff/users',
+        canActivate: [adminGuard],
+        loadComponent: () => import('./features/staff/users.component').then(m => m.UsersComponent)
       },
       {
         path: 'knowledge',

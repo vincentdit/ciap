@@ -43,6 +43,11 @@ import { AuthService } from '../core/auth/auth.service';
                 <span class="dot"></span> Consultants
               </a>
             }
+            @if (isAdmin()) {
+              <a routerLink="/staff/users" routerLinkActive="active" class="nav-item">
+                <span class="dot"></span> User management
+              </a>
+            }
           }
         </nav>
       </aside>
@@ -80,7 +85,7 @@ import { AuthService } from '../core/auth/auth.service';
     </div>
   `,
   styles: [`
-    .shell { display: grid; grid-template-columns: 264px 1fr; min-height: 100vh; }
+    .shell { display: grid; grid-template-columns: 264px 1fr; min-height: 100vh; align-items: stretch; }
 
     .sidebar {
       background: var(--teal-900);
@@ -88,9 +93,8 @@ import { AuthService } from '../core/auth/auth.service';
       display: flex;
       flex-direction: column;
       padding: 1.6rem 1.1rem;
-      position: sticky;
-      top: 0;
-      height: 100vh;
+      align-self: stretch;
+      min-height: 100vh;
     }
     .brand { padding: 0 0.6rem 1.6rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
     .brand-logo { height: 44px; width: auto; margin-bottom: 0.9rem; display: block; }
@@ -207,7 +211,7 @@ import { AuthService } from '../core/auth/auth.service';
 
     @media (max-width: 820px) {
       .shell { grid-template-columns: 1fr; }
-      .sidebar { position: relative; height: auto; flex-direction: column; }
+      .sidebar { position: relative; min-height: 0; height: auto; flex-direction: column; }
       .topbar { padding: 0.7rem 1rem; }
       .content { padding: 1.6rem 1.2rem; }
       .user-meta { display: none; }
@@ -238,6 +242,10 @@ export class ShellComponent {
 
   canManageConsultants(): boolean {
     return this.auth.hasAnyRole('MANAGER', 'ADMIN');
+  }
+
+  isAdmin(): boolean {
+    return this.auth.hasAnyRole('ADMIN');
   }
 
   toggleMenu(event: MouseEvent): void {

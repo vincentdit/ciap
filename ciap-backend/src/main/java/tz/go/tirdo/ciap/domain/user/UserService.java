@@ -1,8 +1,13 @@
 package tz.go.tirdo.ciap.domain.user;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tz.go.tirdo.ciap.common.exception.BusinessException;
 import tz.go.tirdo.ciap.common.exception.ResourceNotFoundException;
 
 import java.util.HashSet;
@@ -39,5 +44,52 @@ public class UserService {
                 .build();
 
         return userRepository.save(user);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<User> list(Pageable pageable) {
+        Pageable sorted = pageable.getSort().isSorted()
+                ? pageable
+                : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by("fullName"));
+        return userRepository.findAll(sorted);
+    }
+
+    /**
+     * Replaces the account's role. Each account keeps exactly one role.
+     * Existing tokens are revoked so the new role applies at the next sign-in.
+     */
+    @Transactional
+    public User replaceRole(Long id, RoleName roleName, String actorEmail) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User", id));
+        if (user.getEmail().equalsIgnoreCase(actorEmail) && roleName != RoleName.ADMIN) {
+            throw new BusinessException("You cannot remove your own administrator role");
+        }
+        Role role = roleRepository.findByName(roleName)
+                .orElseThrow(() -> new ResourceNotFoundException("Role", roleName));
+        user.getRoles().clear();
+        user.getRoles().add(role);
+        revokeSessions(user);
+        return userRepository.save(user);
+    }
+
+    /** Disabling an account revokes its tokens. An administrator cannot disable themselves. */
+    @Transactional
+    public User setEnabled(Long id, boolean enabled, String actorEmail) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User", id));
+        if (!enabled && user.getEmail().equalsIgnoreCase(actorEmail)) {
+            throw new BusinessException("You cannot disable your own account");
+        }
+        user.setEnabled(enabled);
+        if (!enabled) {
+            revokeSessions(user);
+        }
+        return userRepository.save(user);
+    }
+
+    private void revokeSessions(User user) {
+        user.setTokenVersion(user.getTokenVersion() + 1);
+        user.setRefreshTokenId(null);
     }
 }

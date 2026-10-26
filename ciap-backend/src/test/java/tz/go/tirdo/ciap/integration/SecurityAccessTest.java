@@ -73,4 +73,26 @@ class SecurityAccessTest {
         mockMvc.perform(get("/reports/summary"))
                 .andExpect(status().isOk());
     }
+
+    @Test
+    @WithMockUser(roles = "MANAGER")
+    @DisplayName("only an administrator can list users")
+    void managerCannotListUsers() throws Exception {
+        mockMvc.perform(get("/users"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("an administrator can list users and cannot create a client login here")
+    void adminManagesUsers() throws Exception {
+        mockMvc.perform(get("/users"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/auth/staff")
+                        .contentType("application/json")
+                        .content("""
+                                {"email":"client-via-staff@example.test","password":"Staff@12345","fullName":"Not A Client","roles":["CLIENT"]}
+                                """))
+                .andExpect(status().isUnprocessableEntity());
+    }
 }

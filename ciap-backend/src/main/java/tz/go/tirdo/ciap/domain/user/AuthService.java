@@ -168,6 +168,12 @@ public class AuthService {
 
     @Transactional
     public UserResponse registerStaff(RegisterUserRequest request) {
+        if (request.roles() == null
+                || request.roles().size() != 1
+                || request.roles().contains(RoleName.CLIENT)) {
+            throw new BusinessException(
+                    "Choose one staff role: administrator, manager, expert, or finance");
+        }
         if (userRepository.existsByEmail(request.email())) {
             throw new DuplicateResourceException(
                     "Staff account could not be created with the details provided");
