@@ -15,6 +15,8 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const isAuthCall = req.url.includes('/auth/login')
     || req.url.includes('/auth/refresh')
     || req.url.includes('/auth/logout');
+  // A wrong current password is a 401. That is not an expired session.
+  const skipRefresh = isAuthCall || req.url.includes('/auth/change-password');
   const token = auth.accessToken;
 
   const decorated = (token && !isAuthCall)
@@ -23,7 +25,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(decorated).pipe(
     catchError((err: HttpErrorResponse) => {
-      if (err.status === 401 && !isAuthCall && auth.refreshToken) {
+      if (err.status === 401 && !skipRefresh && auth.refreshToken) {
         return auth.refresh().pipe(
           switchMap(() => {
             const retried = req.clone({

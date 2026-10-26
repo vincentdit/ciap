@@ -28,6 +28,9 @@ import { AuthService } from '../../core/auth/auth.service';
           <h2>Sign in</h2>
           <p class="muted sub">Access your consultancy dashboard.</p>
 
+          @if (passwordChanged()) {
+            <div class="alert alert-ok">Password updated. Sign in with your new password.</div>
+          }
           @if (error()) {
             <div class="alert alert-error">{{ error() }}</div>
           }
@@ -111,6 +114,7 @@ export class LoginComponent {
 
   protected loading = signal(false);
   protected error = signal<string | null>(null);
+  protected passwordChanged = signal(this.route.snapshot.queryParamMap.get('changed') === '1');
 
   protected form = this.fb.nonNullable.group({
     email: ['', [Validators.required, Validators.email]],

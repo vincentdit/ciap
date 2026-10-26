@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
-  ApiResponse, AuthResponse, LoginRequest, RefreshTokenRequest
+  ApiResponse, AuthResponse, ChangePasswordRequest, LoginRequest, RefreshTokenRequest
 } from '../models/api.models';
 
 const ACCESS_KEY = 'ciap.accessToken';
@@ -25,6 +25,7 @@ export class AuthService {
   readonly session = this._session.asReadonly();
   readonly isAuthenticated = computed(() => this._session() !== null);
   readonly displayName = computed(() => this._session()?.fullName ?? '');
+  readonly email = computed(() => this._session()?.email ?? '');
   readonly roles = computed(() => this._session()?.roles ?? []);
 
   constructor(private http: HttpClient) {}
@@ -38,6 +39,10 @@ export class AuthService {
     const body: RefreshTokenRequest = { refreshToken: this.refreshToken ?? '' };
     return this.http.post<ApiResponse<AuthResponse>>(`${this.base}/auth/refresh`, body)
       .pipe(tap(res => this.store(res.data)));
+  }
+
+  changePassword(body: ChangePasswordRequest): Observable<ApiResponse<void>> {
+    return this.http.post<ApiResponse<void>>(`${this.base}/auth/change-password`, body);
   }
 
   logout(): void {

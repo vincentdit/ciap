@@ -66,6 +66,14 @@ export const routes: Routes = [
       {
         path: 'training',
         loadComponent: () => import('./features/content/training.component').then(m => m.TrainingComponent)
+      },
+      {
+        path: 'profile',
+        loadComponent: () => import('./features/account/profile.component').then(m => m.ProfileComponent)
+      },
+      {
+        path: 'account/password',
+        loadComponent: () => import('./features/account/change-password.component').then(m => m.ChangePasswordComponent)
       }
     ]
   },

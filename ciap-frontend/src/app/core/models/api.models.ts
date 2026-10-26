@@ -38,6 +38,11 @@ export interface RefreshTokenRequest {
   refreshToken: string;
 }
 
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
 // ---- Client ----
 export type ClientType =
   | 'INDUSTRY' | 'SME' | 'INVESTOR' | 'RESEARCHER'
