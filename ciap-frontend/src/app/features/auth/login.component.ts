@@ -28,6 +28,9 @@ import { AuthService } from '../../core/auth/auth.service';
           <h2>Sign in</h2>
           <p class="muted sub">Access your consultancy dashboard.</p>
 
+          @if (sessionExpired()) {
+            <div class="alert alert-error">Your session expired. Sign in again.</div>
+          }
           @if (passwordChanged()) {
             <div class="alert alert-ok">Password updated. Sign in with your new password.</div>
           }
@@ -115,6 +118,9 @@ export class LoginComponent {
   protected loading = signal(false);
   protected error = signal<string | null>(null);
   protected passwordChanged = signal(this.route.snapshot.queryParamMap.get('changed') === '1');
+  protected sessionExpired = signal(
+    this.route.snapshot.queryParamMap.get('expired') === '1' || this.auth.consumeExpiredNotice()
+  );
 
   protected form = this.fb.nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
