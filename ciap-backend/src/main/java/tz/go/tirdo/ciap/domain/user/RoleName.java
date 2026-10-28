@@ -6,6 +6,8 @@ package tz.go.tirdo.ciap.domain.user;
 public enum RoleName {
     ADMIN,
     MANAGER,
+    /** Head of one department. This role does not see other departments. */
+    HOD,
     EXPERT,
     FINANCE,
     CLIENT

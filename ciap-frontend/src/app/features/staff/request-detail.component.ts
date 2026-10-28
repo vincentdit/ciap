@@ -7,10 +7,10 @@ import { RequestApi } from '../../core/api/request.api';
 import { WorkflowApi } from '../../core/api/workflow.api';
 import { QuotationApi } from '../../core/api/quotation.api';
 import { BillingApi } from '../../core/api/billing.api';
-import { ConsultantApi } from '../../core/api/consultant.api';
 import { AuthService } from '../../core/auth/auth.service';
 import {
-  RequestResponse, RequestStatus, QuotationResponse, PaymentResponse, ConsultantResponse
+  RequestResponse, RequestStatus, QuotationResponse, PaymentResponse, RequestEvent,
+  EligibleAssignee, AssignmentRecord
 } from '../../core/models/api.models';
 import { actionsFor, statusLabel, statusPillClass, WorkflowAction } from './workflow-rules';
 import { DocumentsPanelComponent } from './documents-panel.component';
@@ -20,7 +20,7 @@ import { DocumentsPanelComponent } from './documents-panel.component';
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink, DocumentsPanelComponent],
   template: `
-    <a routerLink="/staff/requests" class="back">← Back to queue</a>
+    <a [routerLink]="backLink()" class="back">← Back to queue</a>
 
     @if (loading()) {
       <div class="card load-card">Loading request…</div>
@@ -46,8 +46,10 @@ import { DocumentsPanelComponent } from './documents-panel.component';
             <dl class="meta">
               <dt>Client</dt><dd>{{ r.clientName }}</dd>
               <dt>Type</dt><dd>{{ typeLabel(r.consultancyType) }}</dd>
+              <dt>Department</dt><dd>{{ r.departmentName || 'Not routed' }}</dd>
               <dt>Expected start</dt><dd>{{ r.expectedStartDate || '—' }}</dd>
               <dt>Assigned consultant</dt><dd>{{ r.assignedConsultantName || '—' }}</dd>
+              <dt>Assignment deadline</dt><dd>{{ r.assignmentDeadline || '—' }}</dd>
             </dl>
             @if (r.description) {
               <div class="desc"><h4>Description</h4><p>{{ r.description }}</p></div>
@@ -68,6 +70,7 @@ import { DocumentsPanelComponent } from './documents-panel.component';
                   <li>
                     <div>
                       <span class="q-no">{{ q.quotationNo }}</span>
+                      <span class="pill pill-neutral">v{{ q.versionNo }}</span>
                       <span class="pill pill-neutral">{{ q.status }}</span>
                     </div>
                     <div class="q-total">{{ q.currency }} {{ q.total | number:'1.0-0' }}</div>
@@ -96,21 +99,90 @@ import { DocumentsPanelComponent } from './documents-panel.component';
                       <span class="pill" [class]="p.status === 'PAID' ? 'pill-done' : 'pill-warn'">{{ p.status }}</span>
                     </div>
                     <div class="p-amt">{{ p.currency }} {{ p.amount | number:'1.0-0' }}</div>
+                    @if (p.confirmedBy) {
+                      <p class="hint">
+                        Confirmed by {{ p.confirmedBy }}
+                        @if (p.confirmationNote) { <span> — {{ p.confirmationNote }}</span> }
+                      </p>
+                    }
                   </li>
                 }
               </ul>
             }
-            <!-- FINANCE: simulate a GePG settlement for a pending control number -->
             @if (canFinance() && hasPendingPayment()) {
               <div class="settle">
-                <h4>Record GePG settlement</h4>
+                <h4>Manual payment record</h4>
+                <p class="hint">This records a finance confirmation. It does not call GePG.</p>
                 <div class="settle-row">
-                  <input [(ngModel)]="gepgRef" placeholder="GePG reference" />
-                  <button class="btn btn-primary sm" [disabled]="busy() || !gepgRef.trim()"
-                          (click)="settle()">Confirm settlement</button>
+                  <input [(ngModel)]="gepgRef" placeholder="Transaction reference" />
                 </div>
-                <p class="hint">Marks the pending control number as paid and advances the workflow.</p>
+                <div class="settle-row">
+                  <input [(ngModel)]="confirmNote" maxlength="500" placeholder="Reason for this confirmation" />
+                </div>
+                <div class="settle-row">
+                  <input [(ngModel)]="flagReason" maxlength="500" placeholder="Reason if it cannot be confirmed" />
+                </div>
+                @if (!settleArmed) {
+                  <div class="form-btns">
+                    <button class="btn btn-primary sm" type="button"
+                            [disabled]="busy() || !gepgRef.trim() || !confirmNote.trim()"
+                            (click)="settleArmed = true">Review confirmation</button>
+                    <button class="btn btn-ghost sm" type="button"
+                            [disabled]="busy() || !flagReason.trim()"
+                            (click)="flagPayment()">Flag for investigation</button>
+                  </div>
+                } @else {
+                  <p class="hint">Record {{ gepgRef.trim() }} against the pending control number?</p>
+                  <div class="form-btns">
+                    <button class="btn btn-primary sm" type="button" [disabled]="busy()" (click)="settle()">Record payment</button>
+                    <button class="btn btn-ghost sm" type="button" [disabled]="busy()" (click)="settleArmed = false">Back</button>
+                  </div>
+                }
               </div>
+            }
+          </section>
+
+          <section class="card panel">
+            <h3>Assignment history</h3>
+            @if (assignments().length === 0) {
+              <p class="muted small">No assignment yet.</p>
+            } @else {
+              <ul class="q-list">
+                @for (row of assignments(); track row.id) {
+                  <li>
+                    <div>
+                      <span class="q-no">{{ row.consultantName }}</span>
+                      <span class="muted small">by {{ row.assignedBy }}</span>
+                    </div>
+                    <div class="muted small">{{ row.createdAt | date:'medium' }}</div>
+                    @if (row.previousConsultantName) {
+                      <p class="hint">Reassigned from {{ row.previousConsultantName }}</p>
+                    }
+                    @if (row.reason) { <p class="hint">Reason: {{ row.reason }}</p> }
+                    @if (row.note) { <p class="hint">{{ row.note }}</p> }
+                  </li>
+                }
+              </ul>
+            }
+          </section>
+
+          <section class="card panel">
+            <h3>History</h3>
+            @if (events().length === 0) {
+              <p class="muted small">No status history yet.</p>
+            } @else {
+              <ul class="q-list">
+                @for (event of events(); track event.id) {
+                  <li>
+                    <div>
+                      <span class="q-no">{{ event.fromStatus || 'New' }} → {{ event.toStatus }}</span>
+                      <span class="muted small">{{ event.actor }}</span>
+                    </div>
+                    <div class="muted small">{{ event.createdAt | date:'medium' }}</div>
+                    @if (event.reason) { <p class="hint">{{ event.reason }}</p> }
+                  </li>
+                }
+              </ul>
             }
           </section>
 
@@ -154,9 +226,12 @@ import { DocumentsPanelComponent } from './documents-panel.component';
                     <input type="radio" name="approved" [value]="false" [(ngModel)]="reviewApproved" />
                     Reject
                   </label>
-                  <textarea [(ngModel)]="reviewNotes" placeholder="Review notes (optional)"></textarea>
+                  <textarea [(ngModel)]="reviewNotes" placeholder="Review notes"></textarea>
+                  @if (!reviewApproved && !reviewNotes.trim()) {
+                    <p class="hint">A rejection needs a reason.</p>
+                  }
                   <div class="form-btns">
-                    <button class="btn btn-primary sm" [disabled]="busy()" (click)="doReview(a)">Submit</button>
+                    <button class="btn btn-primary sm" [disabled]="busy() || (!reviewApproved && !reviewNotes.trim())" (click)="doReview(a)">Submit</button>
                     <button class="btn btn-ghost sm" (click)="openForm.set(null)">Cancel</button>
                   </div>
                 </div>
@@ -165,18 +240,31 @@ import { DocumentsPanelComponent } from './documents-panel.component';
               @else if (a.form === 'assign' && openForm() === 'assign') {
                 <div class="inline-form">
                   <select [(ngModel)]="selectedConsultant">
-                    <option [ngValue]="null" disabled>Select consultant…</option>
-                    @for (c of consultants(); track c.id) {
-                      <option [ngValue]="c.id">
-                        {{ c.fullName }} — {{ avail(c) }} ({{ c.activeAssignments }} active)
+                    <option [ngValue]="null" disabled>Select a staff member…</option>
+                    @for (c of assignees(); track c.consultantId) {
+                      <option [ngValue]="c.consultantId">
+                        {{ c.fullName }} — {{ c.role }} — {{ c.category }} ({{ c.activeAssignments }} active)
                       </option>
                     }
                   </select>
-                  <div class="form-btns">
-                    <button class="btn btn-primary sm" [disabled]="busy() || !selectedConsultant"
-                            (click)="doAssign(a)">Assign</button>
-                    <button class="btn btn-ghost sm" (click)="openForm.set(null)">Cancel</button>
-                  </div>
+                  @if (assignees().length === 0) {
+                    <p class="hint">No eligible expert is active in this department.</p>
+                  }
+                  <textarea [(ngModel)]="assignNote" maxlength="500" placeholder="Instructions for the assignee"></textarea>
+                  <input type="date" [(ngModel)]="assignDeadline" aria-label="Assignment deadline" />
+                  @if (!assignArmed) {
+                    <div class="form-btns">
+                      <button class="btn btn-primary sm" type="button" [disabled]="busy() || !selectedConsultant"
+                              (click)="assignArmed = true">Review assignment</button>
+                      <button class="btn btn-ghost sm" type="button" (click)="openForm.set(null)">Cancel</button>
+                    </div>
+                  } @else {
+                    <p class="hint">Assign this request to the selected person?</p>
+                    <div class="form-btns">
+                      <button class="btn btn-primary sm" type="button" [disabled]="busy()" (click)="doAssign(a)">Confirm assignment</button>
+                      <button class="btn btn-ghost sm" type="button" (click)="assignArmed = false">Back</button>
+                    </div>
+                  }
                 </div>
               }
               <!-- Plain button (or opener for a form) -->
@@ -189,6 +277,29 @@ import { DocumentsPanelComponent } from './documents-panel.component';
                         (click)="onAction(a)">
                   {{ a.label }}
                 </button>
+              }
+            }
+            @if (canLead() && (r.status === 'ASSIGNED' || r.status === 'IN_EXECUTION')) {
+              <button class="btn btn-block btn-ghost action-btn" type="button" [disabled]="busy()"
+                      (click)="openReassign()">Reassign</button>
+              @if (openForm() === 'reassign') {
+                <div class="inline-form">
+                  <select [(ngModel)]="selectedConsultant">
+                    <option [ngValue]="null" disabled>Select the new assignee…</option>
+                    @for (c of assignees(); track c.consultantId) {
+                      <option [ngValue]="c.consultantId">{{ c.fullName }} — {{ c.activeAssignments }} active</option>
+                    }
+                  </select>
+                  <textarea [(ngModel)]="reassignReason" maxlength="500" placeholder="Reason for reassignment"></textarea>
+                  <textarea [(ngModel)]="assignNote" maxlength="500" placeholder="Instructions for the new assignee"></textarea>
+                  <input type="date" [(ngModel)]="assignDeadline" aria-label="New deadline" />
+                  <div class="form-btns">
+                    <button class="btn btn-primary sm" type="button"
+                            [disabled]="busy() || !selectedConsultant || !reassignReason.trim()"
+                            (click)="doReassign()">Confirm reassignment</button>
+                    <button class="btn btn-ghost sm" type="button" (click)="openForm.set(null)">Cancel</button>
+                  </div>
+                </div>
               }
             }
           </section>
@@ -229,7 +340,7 @@ import { DocumentsPanelComponent } from './documents-panel.component';
     .q-total, .p-amt { font-weight: 600; font-family: var(--font-display); }
 
     .settle { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
-    .settle-row { display: flex; gap: 0.5rem; }
+    .settle-row { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
     .settle-row input { flex: 1; padding: 0.5rem 0.7rem; border: 1px solid var(--line-2); border-radius: var(--radius-sm); font-family: var(--font-body); }
 
     .actions { position: sticky; top: 1.5rem; }
@@ -255,7 +366,6 @@ export class RequestDetailComponent implements OnInit {
   private workflow = inject(WorkflowApi);
   private quotationApi = inject(QuotationApi);
   private billingApi = inject(BillingApi);
-  private consultantApi = inject(ConsultantApi);
   private auth = inject(AuthService);
 
   protected loading = signal(true);
@@ -267,16 +377,25 @@ export class RequestDetailComponent implements OnInit {
   protected request = signal<RequestResponse | null>(null);
   protected quotations = signal<QuotationResponse[]>([]);
   protected payments = signal<PaymentResponse[]>([]);
-  protected consultants = signal<ConsultantResponse[]>([]);
+  protected events = signal<RequestEvent[]>([]);
+  protected assignees = signal<EligibleAssignee[]>([]);
+  protected assignments = signal<AssignmentRecord[]>([]);
   protected project = signal<{ id: number; projectCode: string; progressPercent: number } | null>(null);
 
-  protected openForm = signal<'review' | 'assign' | null>(null);
+  protected openForm = signal<'review' | 'assign' | 'reassign' | null>(null);
 
   // form models
   protected reviewApproved = true;
   protected reviewNotes = '';
   protected selectedConsultant: number | null = null;
+  protected assignNote = '';
+  protected assignDeadline = '';
+  protected assignArmed = false;
+  protected reassignReason = '';
   protected gepgRef = '';
+  protected confirmNote = '';
+  protected flagReason = '';
+  protected settleArmed = false;
 
   protected id!: number;
 
@@ -311,19 +430,29 @@ export class RequestDetailComponent implements OnInit {
     forkJoin({
       quotes: this.quotationApi.listForRequest(this.id).pipe(catchError(() => of(null))),
       pays: this.billingApi.listForRequest(this.id).pipe(catchError(() => of(null))),
-      consultants: this.canManage()
-        ? this.consultantApi.list(0, 100).pipe(catchError(() => of(null)))
+      events: this.requestApi.events(this.id).pipe(catchError(() => of(null))),
+      assignees: this.canLead()
+        ? this.requestApi.assignees(this.id).pipe(catchError(() => of(null)))
+        : of(null),
+      assignments: this.auth.hasAnyRole('HOD', 'ADMIN', 'MANAGER', 'EXPERT')
+        ? this.requestApi.assignments(this.id).pipe(catchError(() => of(null)))
         : of(null)
-    }).subscribe(({ quotes, pays, consultants }) => {
+    }).subscribe(({ quotes, pays, events, assignees, assignments }) => {
       if (quotes) this.quotations.set(quotes.data);
       if (pays) this.payments.set(pays.data);
-      if (consultants) this.consultants.set(consultants.data.content);
+      if (events) this.events.set(events.data);
+      if (assignees) this.assignees.set(assignees.data);
+      if (assignments) this.assignments.set(assignments.data);
     });
   }
 
   // ---- role helpers ----
   canManage(): boolean { return this.auth.hasAnyRole('MANAGER', 'ADMIN'); }
+  canLead(): boolean { return this.auth.hasAnyRole('HOD', 'ADMIN'); }
   canFinance(): boolean { return this.auth.hasAnyRole('FINANCE', 'ADMIN'); }
+  backLink(): string {
+    return this.auth.hasAnyRole('HOD') && !this.auth.hasAnyRole('ADMIN') ? '/department' : '/staff/requests';
+  }
 
   hasPendingPayment(): boolean {
     return this.payments().some(p => p.status === 'PENDING');
@@ -333,22 +462,30 @@ export class RequestDetailComponent implements OnInit {
     return s === 'PAID' || s === 'ASSIGNED' || s === 'IN_EXECUTION';
   }
 
-  avail(c: ConsultantResponse): string {
-    return c.availabilityStatus.replace(/_/g, ' ').toLowerCase();
-  }
-
   // ---- actions ----
   onAction(a: WorkflowAction): void {
     if (a.form === 'review') { this.openForm.set('review'); return; }
     if (a.form === 'assign') { this.openForm.set('assign'); return; }
+    if (a.action === 'await-payment') { this.issueControlNumber(); return; }
     this.run(a.action, () => this.callPlain(a.action));
+  }
+
+  private issueControlNumber(): void {
+    this.busy.set(true);
+    this.clearMsgs();
+    this.billingApi.issue(this.id).subscribe({
+      next: () => {
+        this.actionMsg.set('Control number issued. The request is awaiting payment.');
+        this.busy.set(false);
+        this.loadAll();
+      },
+      error: (err) => { this.actionErr.set(this.errText(err)); this.busy.set(false); }
+    });
   }
 
   private callPlain(action: string) {
     switch (action) {
       case 'start-review': return this.workflow.startReview(this.id);
-      case 'await-payment': return this.workflow.awaitPayment(this.id);
-      case 'confirm-payment': return this.workflow.confirmPayment(this.id);
       case 'start-execution': return this.workflow.startExecution(this.id);
       case 'submit-report': return this.workflow.submitReport(this.id);
       case 'close': return this.workflow.close(this.id);
@@ -364,7 +501,39 @@ export class RequestDetailComponent implements OnInit {
 
   doAssign(_a: WorkflowAction): void {
     if (!this.selectedConsultant) return;
-    this.run('assign', () => this.workflow.assign(this.id, { consultantId: this.selectedConsultant! }));
+    this.run('assign', () => this.workflow.assign(this.id, {
+      consultantId: this.selectedConsultant!,
+      note: this.assignNote.trim() || undefined,
+      deadline: this.assignDeadline || undefined
+    }));
+  }
+
+  openReassign(): void {
+    this.selectedConsultant = null;
+    this.openForm.set('reassign');
+  }
+
+  doReassign(): void {
+    if (!this.selectedConsultant || !this.reassignReason.trim()) return;
+    this.busy.set(true);
+    this.clearMsgs();
+    this.workflow.reassign(this.id, {
+      consultantId: this.selectedConsultant,
+      reason: this.reassignReason.trim(),
+      note: this.assignNote.trim() || undefined,
+      deadline: this.assignDeadline || undefined
+    }).subscribe({
+      next: (res) => {
+        this.request.set(res.data);
+        this.openForm.set(null);
+        this.reassignReason = '';
+        this.assignNote = '';
+        this.busy.set(false);
+        this.actionMsg.set('Reassigned. Earlier notes and documents are unchanged.');
+        this.loadSideData();
+      },
+      error: (err) => { this.actionErr.set(this.errText(err)); this.busy.set(false); }
+    });
   }
 
   settle(): void {
@@ -372,11 +541,40 @@ export class RequestDetailComponent implements OnInit {
     if (!pending) return;
     this.busy.set(true);
     this.clearMsgs();
-    this.billingApi.gepgCallback({ controlNumber: pending.controlNumber, gepgReference: this.gepgRef.trim() })
-      .subscribe({
-        next: () => { this.actionMsg.set('Settlement recorded.'); this.gepgRef = ''; this.busy.set(false); this.loadAll(); },
+    const note = this.confirmNote.trim();
+    if (!note || !this.gepgRef.trim()) return;
+    this.billingApi.gepgCallback({
+      controlNumber: pending.controlNumber,
+      gepgReference: this.gepgRef.trim(),
+      confirmationNote: note
+    }).subscribe({
+        next: () => {
+          this.actionMsg.set('Payment recorded. The request is paid and can be assigned.');
+          this.gepgRef = '';
+          this.confirmNote = '';
+          this.settleArmed = false;
+          this.busy.set(false);
+          this.loadAll();
+        },
         error: (err) => { this.actionErr.set(this.errText(err)); this.busy.set(false); }
       });
+  }
+
+  flagPayment(): void {
+    const pending = this.payments().find(p => p.status === 'PENDING');
+    const reason = this.flagReason.trim();
+    if (!pending || !reason) return;
+    this.busy.set(true);
+    this.clearMsgs();
+    this.billingApi.flag(pending.id, reason).subscribe({
+      next: () => {
+        this.actionMsg.set('Payment flagged. The request is still awaiting payment.');
+        this.flagReason = '';
+        this.busy.set(false);
+        this.loadAll();
+      },
+      error: (err) => { this.actionErr.set(this.errText(err)); this.busy.set(false); }
+    });
   }
 
   createProject(): void {
@@ -403,7 +601,7 @@ export class RequestDetailComponent implements OnInit {
   private errText(err: any): string {
     if (err?.status === 403) return 'Your role is not permitted to perform this action.';
     if (err?.status === 422) return err?.error?.message || 'That transition is not allowed from the current status.';
-    if (err?.status === 404) return 'Not found.';
+    if (err?.status === 409) return 'This record was updated by someone else. Reload and try again.';
     return err?.error?.message || 'The action failed. Please try again.';
   }
 

@@ -24,9 +24,9 @@ public class TrainingController {
 
     /** Published events — any authenticated user; marks whether the caller is registered. */
     @GetMapping
-    public ResponseEntity<ApiResponse<PageResponse<EventResponse>>> listPublished(Pageable pageable,
-                                                                                  Authentication auth) {
-        Page<EventResponse> page = service.listPublished(pageable).map(e ->
+    public ResponseEntity<ApiResponse<PageResponse<EventResponse>>> listPublished(
+            @RequestParam(required = false) String q, Pageable pageable, Authentication auth) {
+        Page<EventResponse> page = service.listPublished(q, pageable).map(e ->
                 EventResponse.from(e, service.registeredCount(e.getId()),
                         service.isRegistered(e.getId(), auth.getName())));
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(page)));
@@ -34,8 +34,9 @@ public class TrainingController {
 
     @GetMapping("/all")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
-    public ResponseEntity<ApiResponse<PageResponse<EventResponse>>> listAll(Pageable pageable, Authentication auth) {
-        Page<EventResponse> page = service.listAll(pageable).map(e ->
+    public ResponseEntity<ApiResponse<PageResponse<EventResponse>>> listAll(
+            @RequestParam(required = false) String q, Pageable pageable, Authentication auth) {
+        Page<EventResponse> page = service.listAll(q, pageable).map(e ->
                 EventResponse.from(e, service.registeredCount(e.getId()),
                         service.isRegistered(e.getId(), auth.getName())));
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(page)));

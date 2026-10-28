@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../core/auth/auth.service';
 import { CreateStaffRequest, UserAccount, UserApi } from '../../core/api/user.api';
+import { ListSearchComponent, PagerComponent } from '../../shared/list-controls.component';
 
 interface RoleOption {
   value: string;
@@ -12,7 +13,7 @@ interface RoleOption {
 @Component({
   selector: 'app-users',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ListSearchComponent, PagerComponent],
   template: `
     <header class="page-head">
       <div>
@@ -65,10 +66,12 @@ interface RoleOption {
       </div>
     }
 
+    <app-list-search placeholder="Name, email, or phone" (queryChange)="onQuery($event)" />
+
     @if (loading()) {
       <div class="card load-card">Loading accounts…</div>
     } @else if (rows().length === 0) {
-      <div class="card empty"><p>No accounts yet.</p></div>
+      <div class="card empty"><p>{{ query ? 'No accounts match this search.' : 'No accounts yet.' }}</p></div>
     } @else {
       <div class="card table-card">
         <table>
@@ -112,6 +115,7 @@ interface RoleOption {
             }
           </tbody>
         </table>
+        <app-pager [page]="page()" [totalPages]="totalPages()" [total]="total()" (pageChange)="load($event)" />
       </div>
     }
   `,
@@ -150,6 +154,7 @@ export class UsersComponent implements OnInit {
 
   protected readonly staffRoles: RoleOption[] = [
     { value: 'MANAGER', label: 'Manager' },
+    { value: 'HOD', label: 'Head of Department' },
     { value: 'EXPERT', label: 'Expert' },
     { value: 'FINANCE', label: 'Finance' },
     { value: 'ADMIN', label: 'Administrator' }
@@ -166,10 +171,22 @@ export class UsersComponent implements OnInit {
   protected showForm = signal(false);
   protected msg = signal<string | null>(null);
   protected err = signal<string | null>(null);
+  protected page = signal(0);
+  protected totalPages = signal(1);
+  protected total = signal(0);
+  protected query = '';
+
+  private readonly size = 10;
+  private ticket = 0;
 
   protected form = { fullName: '', email: '', phone: '', password: '', role: 'MANAGER' };
 
-  ngOnInit(): void { this.load(); }
+  ngOnInit(): void { this.load(0); }
+
+  onQuery(q: string): void {
+    this.query = q;
+    this.load(0);
+  }
 
   isSelf(user: UserAccount): boolean {
     return user.email.toLowerCase() === this.auth.email().toLowerCase();
@@ -188,12 +205,12 @@ export class UsersComponent implements OnInit {
       next: () => {
         this.savingId.set(null);
         this.msg.set(`${user.fullName} is now ${this.label(role)}. They must sign in again.`);
-        this.load();
+        this.load(this.page());
       },
       error: (e) => {
         this.savingId.set(null);
         this.err.set(e?.error?.message || 'The role could not be changed.');
-        this.load();
+        this.load(this.page());
       }
     });
   }
@@ -207,7 +224,7 @@ export class UsersComponent implements OnInit {
         this.msg.set(user.enabled
           ? `${user.fullName} can no longer sign in.`
           : `${user.fullName} can sign in again.`);
-        this.load();
+        this.load(this.page());
       },
       error: (e) => {
         this.savingId.set(null);
@@ -238,7 +255,7 @@ export class UsersComponent implements OnInit {
         this.msg.set('Account created. Ask them to sign in and change the temporary password.');
         this.form = { fullName: '', email: '', phone: '', password: '', role: 'MANAGER' };
         this.showForm.set(false);
-        this.load();
+        this.load(0);
       },
       error: (e) => {
         this.busy.set(false);
@@ -249,14 +266,20 @@ export class UsersComponent implements OnInit {
     });
   }
 
-  private load(): void {
-    this.loading.set(true);
-    this.api.list().subscribe({
+  load(p: number): void {
+    const ticket = ++this.ticket;
+    if (this.rows().length === 0) this.loading.set(true);
+    this.api.list(p, this.size, this.query).subscribe({
       next: (res) => {
+        if (ticket !== this.ticket) return;
         this.rows.set(res.data.content);
+        this.page.set(res.data.page);
+        this.totalPages.set(Math.max(1, res.data.totalPages));
+        this.total.set(res.data.totalElements);
         this.loading.set(false);
       },
       error: (e) => {
+        if (ticket !== this.ticket) return;
         this.loading.set(false);
         this.err.set(e?.status === 403
           ? 'Only an administrator can manage users.'

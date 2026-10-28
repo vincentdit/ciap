@@ -5,6 +5,8 @@ import lombok.*;
 import tz.go.tirdo.ciap.common.audit.Auditable;
 import tz.go.tirdo.ciap.domain.client.Client;
 import tz.go.tirdo.ciap.domain.consultant.Consultant;
+import tz.go.tirdo.ciap.domain.department.Department;
+import tz.go.tirdo.ciap.domain.department.RoutingStatus;
 
 import java.time.LocalDate;
 
@@ -51,6 +53,23 @@ public class ConsultancyRequest extends Auditable {
     @JoinColumn(name = "assigned_consultant_id")
     private Consultant assignedConsultant;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_id")
+    private Department department;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "routing_status", nullable = false, length = 20)
+    @Builder.Default
+    private RoutingStatus routingStatus = RoutingStatus.UNMAPPED;
+
+    @Column(name = "assignment_deadline")
+    private LocalDate assignmentDeadline;
+
     @Column(name = "review_notes", columnDefinition = "TEXT")
     private String reviewNotes;
+
+    @Version
+    @Column(name = "lock_version", nullable = false)
+    @Builder.Default
+    private long lockVersion = 0;
 }

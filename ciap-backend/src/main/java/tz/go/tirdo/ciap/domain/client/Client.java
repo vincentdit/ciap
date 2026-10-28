@@ -46,6 +46,9 @@ public class Client extends Auditable {
     @Column(length = 300)
     private String physicalAddress;
 
+    @Column(length = 80)
+    private String country;
+
     /** Linked login account (role CLIENT). */
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", unique = true)

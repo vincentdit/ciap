@@ -6,7 +6,7 @@ import { AuthService } from '../auth/auth.service';
 export const staffGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   const router = inject(Router);
-  if (auth.hasAnyRole('ADMIN', 'MANAGER', 'FINANCE', 'EXPERT')) {
+  if (auth.hasAnyRole('ADMIN', 'MANAGER', 'FINANCE', 'EXPERT', 'HOD')) {
     return true;
   }
   return router.createUrlTree(['/dashboard']);

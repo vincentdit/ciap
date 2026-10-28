@@ -95,4 +95,69 @@ class SecurityAccessTest {
                                 """))
                 .andExpect(status().isUnprocessableEntity());
     }
+
+    @Test
+    @DisplayName("finance queue requires a signed-in user")
+    void financeQueueRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/payments/summary"))
+                .andExpect(status().is4xxClientError());
+    }
+
+    @Test
+    @WithMockUser(roles = "CLIENT")
+    @DisplayName("a client cannot record or list finance payments")
+    void clientCannotUseFinance() throws Exception {
+        mockMvc.perform(get("/payments")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/payments/gepg-callback")
+                        .contentType("application/json")
+                        .content("""
+                                {"controlNumber":"123456789012","gepgReference":"X","confirmationNote":"slip"}
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "EXPERT")
+    @DisplayName("an expert cannot record or list finance payments")
+    void expertCannotUseFinance() throws Exception {
+        mockMvc.perform(get("/payments/summary")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/payments/gepg-callback")
+                        .contentType("application/json")
+                        .content("""
+                                {"controlNumber":"123456789012","gepgReference":"X","confirmationNote":"slip"}
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "MANAGER")
+    @DisplayName("a manager cannot confirm a payment or open the finance queue")
+    void managerCannotConfirmPayments() throws Exception {
+        mockMvc.perform(get("/payments")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/payments/gepg-callback")
+                        .contentType("application/json")
+                        .content("""
+                                {"controlNumber":"123456789012","gepgReference":"X","confirmationNote":"slip"}
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "FINANCE")
+    @DisplayName("finance can open the queue and must give a reason to record a payment")
+    void financeQueueRequiresAReason() throws Exception {
+        mockMvc.perform(get("/payments/summary")).andExpect(status().isOk());
+        mockMvc.perform(post("/payments/gepg-callback")
+                        .contentType("application/json")
+                        .content("""
+                                {"controlNumber":"123456789012","gepgReference":"MISSING"}
+                                """))
+                .andExpect(status().isUnprocessableEntity());
+        mockMvc.perform(post("/payments/gepg-callback")
+                        .contentType("application/json")
+                        .content("""
+                                {"controlNumber":"123456789012","gepgReference":"MISSING","confirmationNote":"slip checked"}
+                                """))
+                .andExpect(status().isNotFound());
+    }
 }

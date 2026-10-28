@@ -29,7 +29,7 @@ public class DocumentController {
 
     /** Upload a document against a request (multipart/form-data). */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('CLIENT','EXPERT','MANAGER','ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('CLIENT','EXPERT','HOD','MANAGER','ADMIN','FINANCE')")
     public ResponseEntity<ApiResponse<DocumentResponse>> upload(
             @RequestParam("requestId") Long requestId,
             @RequestParam(value = "category", required = false) DocumentCategory category,
@@ -40,7 +40,7 @@ public class DocumentController {
     }
 
     @GetMapping("/request/{requestId}")
-    @PreAuthorize("hasAnyRole('CLIENT','EXPERT','MANAGER','ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('CLIENT','EXPERT','HOD','MANAGER','ADMIN','FINANCE')")
     public ResponseEntity<ApiResponse<List<DocumentResponse>>> listForRequest(@PathVariable Long requestId) {
         List<DocumentResponse> docs = documentService.listForRequest(requestId)
                 .stream().map(DocumentResponse::from).toList();
@@ -48,14 +48,14 @@ public class DocumentController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('CLIENT','EXPERT','MANAGER','ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('CLIENT','EXPERT','HOD','MANAGER','ADMIN','FINANCE')")
     public ResponseEntity<ApiResponse<DocumentResponse>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(DocumentResponse.from(documentService.getMetadata(id))));
     }
 
     /** Download the file bytes. */
     @GetMapping("/{id}/download")
-    @PreAuthorize("hasAnyRole('CLIENT','EXPERT','MANAGER','ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('CLIENT','EXPERT','HOD','MANAGER','ADMIN','FINANCE')")
     public ResponseEntity<Resource> download(@PathVariable Long id) {
         Document doc = documentService.getMetadata(id);
         Path path = documentService.resolveContent(doc);

@@ -18,5 +18,6 @@ public record ClientRegistrationRequest(
         @NotBlank @Email String email,
         @NotBlank @Size(min = 8) String password,
         String region,
-        String physicalAddress
+        String physicalAddress,
+        @Size(max = 80) String country
 ) {}

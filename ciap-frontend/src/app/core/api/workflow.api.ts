@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { ApiResponse, RequestResponse, ReviewDto, AssignDto } from '../models/api.models';
+import { ApiResponse, RequestResponse, ReviewDto, AssignDto, ReassignDto } from '../models/api.models';
 
 /** Drives the consultancy-request state machine. Each method maps to a backend transition. */
 @Injectable({ providedIn: 'root' })
@@ -20,6 +20,7 @@ export class WorkflowApi {
   awaitPayment(id: number) { return this.post<RequestResponse>(id, 'await-payment'); }
   confirmPayment(id: number) { return this.post<RequestResponse>(id, 'confirm-payment'); }
   assign(id: number, dto: AssignDto) { return this.post<RequestResponse>(id, 'assign', dto); }
+  reassign(id: number, dto: ReassignDto) { return this.post<RequestResponse>(id, 'reassign', dto); }
   startExecution(id: number) { return this.post<RequestResponse>(id, 'start-execution'); }
   submitReport(id: number) { return this.post<RequestResponse>(id, 'submit-report'); }
   close(id: number) { return this.post<RequestResponse>(id, 'close'); }

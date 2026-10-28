@@ -7,6 +7,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import tz.go.tirdo.ciap.common.exception.BusinessException;
 import tz.go.tirdo.ciap.domain.billing.BillingService;
+import tz.go.tirdo.ciap.domain.billing.PaymentStatus;
+import tz.go.tirdo.ciap.domain.billing.QuotationStatus;
 import tz.go.tirdo.ciap.domain.billing.QuotationService;
 import tz.go.tirdo.ciap.domain.billing.dto.CreateQuotationRequest;
 import tz.go.tirdo.ciap.domain.billing.dto.PaymentResponse;
@@ -66,7 +68,7 @@ class PipelineIntegrationTest {
     private Client registerClient(String email, String tin) {
         return clientService.register(new ClientRegistrationRequest(
                 "Acme Industries Ltd", tin, ClientType.INDUSTRY, IndustryCategory.MANUFACTURING,
-                "Jane Mushi", "+255700000000", email, "Client@12345", "Dar es Salaam", "Plot 1"));
+                "Jane Mushi", "+255700000000", email, "Client@12345", "Dar es Salaam", "Plot 1", "Tanzania"));
     }
 
     private Consultant createConsultant() {
@@ -103,6 +105,7 @@ class PipelineIntegrationTest {
         assertThat(quote.subtotal()).isEqualByComparingTo("2300000");
         assertThat(quote.vatAmount()).isEqualByComparingTo("414000");
         assertThat(quote.total()).isEqualByComparingTo("2714000");
+        assertThat(quote.versionNo()).isEqualTo(1);
 
         quotationService.send(quote.id());
 
@@ -116,6 +119,9 @@ class PipelineIntegrationTest {
         PaymentResponse settled = billingService.handleCallback(payment.controlNumber(), "GEPG-TEST-1");
         assertThat(settled.paidAt()).isNotNull();
         assertThat(requestService.get(requestId).status()).isEqualTo(RequestStatus.PAID);
+        PaymentResponse repeated = billingService.handleCallback(payment.controlNumber(), "GEPG-TEST-1");
+        assertThat(repeated.id()).isEqualTo(settled.id());
+        assertThat(repeated.status()).isEqualTo(settled.status());
 
         // Assign
         RequestResponse assigned = requestService.assign(requestId, new AssignDto(consultant.getId()));
@@ -194,5 +200,84 @@ class PipelineIntegrationTest {
         PaymentResponse again = billingService.handleCallback(p.controlNumber(), "GEPG-X");
         assertThat(again.controlNumber()).isEqualTo(p.controlNumber());
         assertThat(requestService.get(req.id()).status()).isEqualTo(RequestStatus.PAID);
+    }
+
+    @Test
+    @DisplayName("a newly sent quotation expires the previous one and a second acceptance is rejected")
+    void quotationVersionsSupersede() {
+        Client client = registerClient("versions@acme.co.tz", "100000009");
+        RequestResponse req = requestService.submit(new CreateRequestDto(
+                client.getId(), ConsultancyType.INDUSTRIAL, "Versioned quote", "desc", null));
+        requestService.startReview(req.id());
+        requestService.review(req.id(), new ReviewDto(true, "ok"));
+
+        QuotationResponse first = quotationService.create(new CreateQuotationRequest(
+                req.id(), null, null, null,
+                List.of(new QuotationItemDto("First", BigDecimal.ONE, new BigDecimal("1000")))));
+        quotationService.send(first.id());
+        QuotationResponse second = quotationService.create(new CreateQuotationRequest(
+                req.id(), null, null, null,
+                List.of(new QuotationItemDto("Second", BigDecimal.ONE, new BigDecimal("2000")))));
+        quotationService.send(second.id());
+
+        assertThat(first.versionNo()).isEqualTo(1);
+        assertThat(second.versionNo()).isEqualTo(2);
+        List<QuotationResponse> quotes = quotationService.listForRequest(req.id());
+        assertThat(quotes).anyMatch(q -> q.id().equals(first.id()) && q.status() == QuotationStatus.EXPIRED);
+        assertThat(quotes).anyMatch(q -> q.id().equals(second.id()) && q.status() == QuotationStatus.SENT);
+
+        quotationService.accept(second.id());
+        QuotationResponse third = quotationService.create(new CreateQuotationRequest(
+                req.id(), null, null, null,
+                List.of(new QuotationItemDto("Third", BigDecimal.ONE, new BigDecimal("3000")))));
+        quotationService.send(third.id());
+        assertThatThrownBy(() -> quotationService.accept(third.id()))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("payment confirmation follows the payment record and does not close the request")
+    void financeConfirmationFollowsThePaymentRecord() {
+        Client client = registerClient("finance-gate@acme.co.tz", "100000010");
+        RequestResponse req = requestService.submit(new CreateRequestDto(
+                client.getId(), ConsultancyType.INDUSTRIAL, "Finance gate", "desc", null));
+        requestService.startReview(req.id());
+        requestService.review(req.id(), new ReviewDto(true, "ok"));
+        QuotationResponse quote = quotationService.create(new CreateQuotationRequest(
+                req.id(), null, null, null,
+                List.of(new QuotationItemDto("Inspection", BigDecimal.ONE, new BigDecimal("1000")))));
+        quotationService.send(quote.id());
+
+        assertThatThrownBy(() -> requestService.markAwaitingPayment(req.id()))
+                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> requestService.confirmPayment(req.id()))
+                .isInstanceOf(BusinessException.class);
+
+        PaymentResponse first = billingService.issueControlNumber(req.id());
+        assertThat(requestService.get(req.id()).status()).isEqualTo(RequestStatus.AWAITING_PAYMENT);
+        billingService.flag(first.id(), "The slip amount does not match the quotation");
+        assertThat(requestService.get(req.id()).status()).isEqualTo(RequestStatus.AWAITING_PAYMENT);
+
+        PaymentResponse replacement = billingService.issueControlNumber(req.id());
+        billingService.handleCallback(replacement.controlNumber(), "GEPG-GATE-1", "Slip matches the quotation");
+        assertThat(requestService.get(req.id()).status()).isEqualTo(RequestStatus.PAID);
+
+        PaymentResponse repeat = billingService.handleCallback(replacement.controlNumber(), "GEPG-GATE-1");
+        assertThat(repeat.status()).isEqualTo(PaymentStatus.PAID);
+        assertThat(requestService.get(req.id()).status()).isEqualTo(RequestStatus.PAID);
+
+        Client other = registerClient("finance-dup@acme.co.tz", "100000011");
+        RequestResponse secondRequest = requestService.submit(new CreateRequestDto(
+                other.getId(), ConsultancyType.ENGINEERING, "Duplicate reference", "desc", null));
+        requestService.startReview(secondRequest.id());
+        requestService.review(secondRequest.id(), new ReviewDto(true, "ok"));
+        quotationService.send(quotationService.create(new CreateQuotationRequest(
+                secondRequest.id(), null, null, null,
+                List.of(new QuotationItemDto("Inspection", BigDecimal.ONE, new BigDecimal("1000"))))).id());
+        PaymentResponse secondPayment = billingService.issueControlNumber(secondRequest.id());
+        assertThatThrownBy(() -> billingService.handleCallback(
+                secondPayment.controlNumber(), "GEPG-GATE-1", "same slip"))
+                .isInstanceOf(BusinessException.class);
+        assertThat(requestService.get(secondRequest.id()).status()).isEqualTo(RequestStatus.AWAITING_PAYMENT);
     }
 }

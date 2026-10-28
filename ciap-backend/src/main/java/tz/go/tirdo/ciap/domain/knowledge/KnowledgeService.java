@@ -4,6 +4,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tz.go.tirdo.ciap.common.SearchTerms;
 import tz.go.tirdo.ciap.common.exception.ResourceNotFoundException;
 import tz.go.tirdo.ciap.domain.knowledge.dto.CreateArticleRequest;
 import tz.go.tirdo.ciap.security.AccessGuard;
@@ -61,11 +62,21 @@ public class KnowledgeService {
 
     @Transactional(readOnly = true)
     public Page<KnowledgeArticle> listAll(Pageable pageable) {
-        return repository.findAll(pageable);
+        return listAll(null, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<KnowledgeArticle> listAll(String q, Pageable pageable) {
+        return repository.searchAll(SearchTerms.like(q), pageable);
     }
 
     @Transactional(readOnly = true)
     public Page<KnowledgeArticle> listPublished(Pageable pageable) {
-        return repository.findByPublishedTrue(pageable);
+        return listPublished(null, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<KnowledgeArticle> listPublished(String q, Pageable pageable) {
+        return repository.searchPublished(SearchTerms.like(q), pageable);
     }
 }

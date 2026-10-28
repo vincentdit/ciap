@@ -14,12 +14,13 @@ public record ClientResponse(
         String phone,
         String email,
         String region,
-        String physicalAddress
+        String physicalAddress,
+        String country
 ) {
     public static ClientResponse from(Client c) {
         return new ClientResponse(
                 c.getId(), c.getCompanyName(), c.getTin(), c.getClientType(),
                 c.getIndustryCategory(), c.getContactPerson(), c.getPhone(),
-                c.getEmail(), c.getRegion(), c.getPhysicalAddress());
+                c.getEmail(), c.getRegion(), c.getPhysicalAddress(), c.getCountry());
     }
 }

@@ -9,18 +9,15 @@ import tz.go.tirdo.ciap.domain.consultancy.ConsultancyRequest;
 import tz.go.tirdo.ciap.domain.consultant.Consultant;
 
 /**
- * Object-level access for the two boundaries this application actually has:
- * a client organisation may see only its own engagements, and an expert may
- * see only engagements assigned to that expert. Institutional roles
- * (admin, manager, finance) keep organisation-wide access.
- *
- * Calls with no authenticated user — service-layer tests and internal
- * workflows — are left unchanged.
+ * Object-level access. A client sees only its own organisation. An expert sees
+ * only engagements assigned to that expert. A Head of Department sees only the
+ * department they head. Admin, manager, and finance keep organisation-wide read
+ * access. Calls with no authenticated user are left unchanged.
  */
 @Component
 public class AccessGuard {
 
-    public enum Kind { ANONYMOUS, CLIENT, EXPERT, INSTITUTION }
+    public enum Kind { ANONYMOUS, CLIENT, EXPERT, HOD, INSTITUTION }
 
     public record Actor(Kind kind, String email) {}
 
@@ -31,6 +28,9 @@ public class AccessGuard {
         }
         if (has(auth, "ADMIN") || has(auth, "MANAGER") || has(auth, "FINANCE")) {
             return new Actor(Kind.INSTITUTION, auth.getName());
+        }
+        if (has(auth, "HOD")) {
+            return new Actor(Kind.HOD, auth.getName());
         }
         if (has(auth, "EXPERT")) {
             return new Actor(Kind.EXPERT, auth.getName());
@@ -53,7 +53,26 @@ public class AccessGuard {
             case ANONYMOUS, INSTITUTION -> true;
             case CLIENT -> ownsClient(request, actor.email());
             case EXPERT -> isAssignedExpert(request, actor.email());
+            case HOD -> isHodOf(request);
         };
+    }
+
+    public boolean isAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && has(auth, "ADMIN");
+    }
+
+    public boolean isHodOf(ConsultancyRequest request) {
+        Actor actor = current();
+        if (actor.kind() != Kind.HOD || actor.email() == null || request.getDepartment() == null) {
+            return false;
+        }
+        var department = request.getDepartment();
+        var hod = department.getHodUser();
+        return department.isActive()
+                && hod != null
+                && hod.isEnabled()
+                && actor.email().equalsIgnoreCase(hod.getEmail());
     }
 
     private boolean ownsClient(ConsultancyRequest request, String email) {

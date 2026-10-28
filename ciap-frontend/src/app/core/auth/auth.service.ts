@@ -27,7 +27,9 @@ export class AuthService {
   private epoch = 0;
 
   private readonly _session = signal<StoredSession | null>(this.readSession());
+  private readonly _expiryWarning = signal(false);
   readonly session = this._session.asReadonly();
+  readonly expiryWarning = this._expiryWarning.asReadonly();
   readonly isAuthenticated = computed(() => this._session() !== null);
   readonly displayName = computed(() => this._session()?.fullName ?? '');
   readonly email = computed(() => this._session()?.email ?? '');
@@ -161,7 +163,10 @@ export class AuthService {
     const refreshExp = this.expiryMs(this.refreshToken);
     const accessExp = this.expiryMs(this.accessToken);
     const wakeAt = Math.min(accessExp ?? refreshExp!, refreshExp!);
-    const delay = Math.min(Math.max(1000, wakeAt - Date.now()), 2_000_000_000);
+    const warnAt = accessExp == null ? wakeAt : accessExp - 120_000;
+    this._expiryWarning.set(accessExp != null && accessExp - Date.now() <= 120_000);
+    const next = this._expiryWarning() ? wakeAt : Math.min(wakeAt, warnAt);
+    const delay = Math.min(Math.max(1000, next - Date.now()), 2_000_000_000);
     this.expiryTimer = setTimeout(() => this.armExpiry(), delay);
   }
 
@@ -192,6 +197,7 @@ export class AuthService {
   }
 
   private clearStoredSession(): void {
+    this._expiryWarning.set(false);
     localStorage.removeItem(ACCESS_KEY);
     localStorage.removeItem(REFRESH_KEY);
     localStorage.removeItem(SESSION_KEY);

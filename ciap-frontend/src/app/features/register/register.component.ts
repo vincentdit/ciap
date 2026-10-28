@@ -101,6 +101,10 @@ import {
               <input id="region" formControlName="region" placeholder="e.g. Dar es Salaam">
             </div>
             <div class="field">
+              <label for="country">Country <span class="muted">(optional)</span></label>
+              <input id="country" formControlName="country" maxlength="80" placeholder="e.g. Tanzania">
+            </div>
+            <div class="field">
               <label for="physicalAddress">Physical address <span class="muted">(optional)</span></label>
               <input id="physicalAddress" formControlName="physicalAddress" placeholder="Street / plot">
             </div>
@@ -154,6 +158,7 @@ export class RegisterComponent {
     email: ['', [Validators.required, Validators.email]],
     password: ['', [Validators.required, Validators.minLength(8)]],
     region: [''],
+    country: [''],
     physicalAddress: ['']
   });
 

@@ -4,6 +4,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tz.go.tirdo.ciap.common.SearchTerms;
 import tz.go.tirdo.ciap.common.exception.BusinessException;
 import tz.go.tirdo.ciap.common.exception.DuplicateResourceException;
 import tz.go.tirdo.ciap.common.exception.ResourceNotFoundException;
@@ -73,12 +74,22 @@ public class TrainingService {
 
     @Transactional(readOnly = true)
     public Page<TrainingEvent> listPublished(Pageable pageable) {
-        return eventRepository.findByPublishedTrue(pageable);
+        return listPublished(null, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<TrainingEvent> listPublished(String q, Pageable pageable) {
+        return eventRepository.searchPublished(SearchTerms.like(q), pageable);
     }
 
     @Transactional(readOnly = true)
     public Page<TrainingEvent> listAll(Pageable pageable) {
-        return eventRepository.findAll(pageable);
+        return listAll(null, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<TrainingEvent> listAll(String q, Pageable pageable) {
+        return eventRepository.searchAll(SearchTerms.like(q), pageable);
     }
 
     @Transactional(readOnly = true)

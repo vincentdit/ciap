@@ -71,6 +71,8 @@ springdoc:
     path: /v3/api-docs
 
 logging:
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{requestId:-}] %logger{36} - %msg%n"
   level:
     tz.go.tirdo.ciap: INFO
     org.springframework.security: WARN

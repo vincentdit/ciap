@@ -14,6 +14,7 @@ import tz.go.tirdo.ciap.domain.consultancy.ConsultancyRequestRepository;
 import tz.go.tirdo.ciap.security.AccessGuard;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -92,6 +93,9 @@ public class DocumentService {
         if (!ALLOWED_TYPES.containsKey(ext)) {
             throw new BusinessException("This file type is not allowed");
         }
+        if (!signatureMatches(ext, file)) {
+            throw new BusinessException("File content does not match its extension");
+        }
         if (description != null && description.length() > 500) {
             throw new BusinessException("Description is too long");
         }
@@ -137,6 +141,33 @@ public class DocumentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Document", id));
         accessGuard.assertCanReadRequest(document.getRequest());
         return document;
+    }
+
+    /**
+     * PDF, PNG, and JPEG must start with their real file signature.
+     * Other allowed types have no reliable signature and are left to the extension allowlist.
+     */
+    private boolean signatureMatches(String ext, MultipartFile file) {
+        if (!ext.equals("pdf") && !ext.equals("png") && !ext.equals("jpg") && !ext.equals("jpeg")) {
+            return true;
+        }
+        byte[] head = new byte[8];
+        int read;
+        try (InputStream in = file.getInputStream()) {
+            read = in.read(head);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to read file", e);
+        }
+        if (read < 0) return false;
+        return switch (ext) {
+            case "pdf" -> read >= 4 && head[0] == '%' && head[1] == 'P' && head[2] == 'D' && head[3] == 'F';
+            case "png" -> read >= 8
+                    && (head[0] & 0xff) == 0x89 && head[1] == 0x50 && head[2] == 0x4E && head[3] == 0x47
+                    && head[4] == 0x0D && head[5] == 0x0A && head[6] == 0x1A && head[7] == 0x0A;
+            case "jpg", "jpeg" -> read >= 3
+                    && (head[0] & 0xff) == 0xFF && (head[1] & 0xff) == 0xD8 && (head[2] & 0xff) == 0xFF;
+            default -> true;
+        };
     }
 
     /** Media type derived from the stored extension, never from the client header. */

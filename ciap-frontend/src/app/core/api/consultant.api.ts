@@ -18,8 +18,9 @@ export class ConsultantApi {
 
   constructor(private http: HttpClient) {}
 
-  list(page = 0, size = 100): Observable<ApiResponse<PageResponse<ConsultantResponse>>> {
-    const params = new HttpParams().set('page', page).set('size', size);
+  list(page = 0, size = 20, q?: string): Observable<ApiResponse<PageResponse<ConsultantResponse>>> {
+    let params = new HttpParams().set('page', page).set('size', size);
+    if (q?.trim()) params = params.set('q', q.trim());
     return this.http.get<ApiResponse<PageResponse<ConsultantResponse>>>(this.base, { params });
   }
 

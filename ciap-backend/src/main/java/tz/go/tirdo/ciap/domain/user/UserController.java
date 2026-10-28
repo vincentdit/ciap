@@ -25,8 +25,9 @@ public class UserController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<PageResponse<UserResponse>>> list(Pageable pageable) {
-        var page = userService.list(pageable).map(UserResponse::from);
+    public ResponseEntity<ApiResponse<PageResponse<UserResponse>>> list(
+            @RequestParam(required = false) String q, Pageable pageable) {
+        var page = userService.list(q, pageable).map(UserResponse::from);
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(page)));
     }
 

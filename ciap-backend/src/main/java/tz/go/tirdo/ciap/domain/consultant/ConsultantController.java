@@ -35,8 +35,9 @@ public class ConsultantController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
-    public ResponseEntity<ApiResponse<PageResponse<ConsultantResponse>>> list(Pageable pageable) {
-        var page = consultantService.list(pageable).map(ConsultantResponse::from);
+    public ResponseEntity<ApiResponse<PageResponse<ConsultantResponse>>> list(
+            @RequestParam(required = false) String q, Pageable pageable) {
+        var page = consultantService.list(q, pageable).map(ConsultantResponse::from);
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(page)));
     }
 }

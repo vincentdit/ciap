@@ -3,11 +3,12 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { RequestApi } from '../../core/api/request.api';
 import { RequestResponse, RequestStatus, PageResponse } from '../../core/models/api.models';
+import { ListSearchComponent, PagerComponent } from '../../shared/list-controls.component';
 
 @Component({
   selector: 'app-request-list',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, ListSearchComponent, PagerComponent],
   template: `
     <header class="page-head">
       <div>
@@ -17,14 +18,18 @@ import { RequestResponse, RequestStatus, PageResponse } from '../../core/models/
       <a routerLink="/requests/new" class="btn btn-primary">+ New Request</a>
     </header>
 
+    <app-list-search placeholder="Reference, title, department, or assignee" (queryChange)="onQuery($event)" />
+
     @if (loading()) {
       <div class="card load-card">Loading requests…</div>
     } @else if (error()) {
       <div class="alert alert-error">{{ error() }}</div>
     } @else if (rows().length === 0) {
       <div class="card empty">
-        <p>No consultancy requests found.</p>
-        <a routerLink="/requests/new" class="btn btn-primary">Submit your first request</a>
+        <p>{{ query ? 'No requests match this search.' : 'No consultancy requests found.' }}</p>
+        @if (!query) {
+          <a routerLink="/requests/new" class="btn btn-primary">Submit your first request</a>
+        }
       </div>
     } @else {
       <div class="card table-card">
@@ -33,8 +38,8 @@ import { RequestResponse, RequestStatus, PageResponse } from '../../core/models/
             <tr>
               <th>Reference</th>
               <th>Title</th>
-              <th>Type</th>
-              <th>Client</th>
+              <th>Department</th>
+              <th>Assignee</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -43,8 +48,8 @@ import { RequestResponse, RequestStatus, PageResponse } from '../../core/models/
               <tr>
                 <td class="ref">{{ r.referenceNo }}</td>
                 <td class="title">{{ r.title }}</td>
-                <td class="type">{{ typeLabel(r.consultancyType) }}</td>
-                <td>{{ r.clientName }}</td>
+                <td>{{ r.departmentName || '—' }}</td>
+                <td>{{ r.assignedConsultantName || '—' }}</td>
                 <td><span class="pill" [class]="pillClass(r.status)">{{ label(r.status) }}</span></td>
               </tr>
             }
@@ -52,13 +57,7 @@ import { RequestResponse, RequestStatus, PageResponse } from '../../core/models/
         </table>
       </div>
 
-      @if (totalPages() > 1) {
-        <div class="pager">
-          <button class="btn btn-ghost" [disabled]="page() === 0" (click)="go(page() - 1)">← Previous</button>
-          <span class="muted">Page {{ page() + 1 }} of {{ totalPages() }}</span>
-          <button class="btn btn-ghost" [disabled]="page() + 1 >= totalPages()" (click)="go(page() + 1)">Next →</button>
-        </div>
-      }
+      <app-pager [page]="page()" [totalPages]="totalPages()" [total]="total()" (pageChange)="go($event)" />
     }
   `,
   styles: [`
@@ -84,10 +83,8 @@ import { RequestResponse, RequestStatus, PageResponse } from '../../core/models/
     .title { font-weight: 500; color: var(--ink); }
     .type { color: var(--ink-soft); }
 
-    .pager { display: flex; align-items: center; justify-content: center; gap: 1.2rem; margin-top: 1.4rem; }
-
     @media (max-width: 720px) {
-      .type, thead th:nth-child(3) { display: none; }
+      thead th:nth-child(4), tbody td:nth-child(4) { display: none; }
     }
   `]
 })
@@ -99,30 +96,44 @@ export class RequestListComponent implements OnInit {
   protected rows = signal<RequestResponse[]>([]);
   protected page = signal(0);
   protected totalPages = signal(1);
+  protected total = signal(0);
+  protected query = '';
 
-  private readonly size = 20;
+  private readonly size = 10;
+  private ticket = 0;
 
   ngOnInit(): void { this.load(0); }
+
+  onQuery(q: string): void {
+    this.query = q;
+    this.load(0);
+  }
 
   go(p: number): void { this.load(p); }
 
   private load(p: number): void {
-    this.loading.set(true);
+    const ticket = ++this.ticket;
+    if (this.rows().length === 0) this.loading.set(true);
     this.error.set(null);
-    this.api.list(p, this.size).subscribe({
+    this.api.list(p, this.size, { q: this.query }).subscribe({
       next: (res) => {
+        if (ticket !== this.ticket) return;
         const page: PageResponse<RequestResponse> = res.data;
         this.rows.set(page.content);
         this.page.set(page.page);
         this.totalPages.set(Math.max(1, page.totalPages));
+        this.total.set(page.totalElements);
         this.loading.set(false);
       },
-      error: () => { this.error.set('Could not load requests.'); this.loading.set(false); }
+      error: () => {
+        if (ticket !== this.ticket) return;
+        this.error.set('Could not load requests.');
+        this.loading.set(false);
+      }
     });
   }
 
   label(s: RequestStatus): string { return s.replace(/_/g, ' ').toLowerCase(); }
-  typeLabel(t: string): string { return t.charAt(0) + t.slice(1).toLowerCase(); }
 
   pillClass(s: RequestStatus): string {
     if (s === 'CLOSED') return 'pill-done';

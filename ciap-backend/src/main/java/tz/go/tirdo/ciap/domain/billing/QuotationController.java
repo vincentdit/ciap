@@ -28,13 +28,13 @@ public class QuotationController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('MANAGER','ADMIN','FINANCE','CLIENT')")
+    @PreAuthorize("hasAnyRole('HOD','MANAGER','ADMIN','FINANCE','CLIENT')")
     public ResponseEntity<ApiResponse<QuotationResponse>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(quotationService.get(id)));
     }
 
     @GetMapping("/request/{requestId}")
-    @PreAuthorize("hasAnyRole('MANAGER','ADMIN','FINANCE','CLIENT')")
+    @PreAuthorize("hasAnyRole('HOD','MANAGER','ADMIN','FINANCE','CLIENT')")
     public ResponseEntity<ApiResponse<List<QuotationResponse>>> listForRequest(@PathVariable Long requestId) {
         return ResponseEntity.ok(ApiResponse.ok(quotationService.listForRequest(requestId)));
     }

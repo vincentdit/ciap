@@ -20,7 +20,8 @@ public record QuotationResponse(
         BigDecimal total,
         LocalDate validUntil,
         String notes,
-        List<QuotationItemResponse> items
+        List<QuotationItemResponse> items,
+        int versionNo
 ) {
     public static QuotationResponse from(Quotation q) {
         return new QuotationResponse(
@@ -28,6 +29,7 @@ public record QuotationResponse(
                 q.getRequest().getId(), q.getRequest().getReferenceNo(),
                 q.getStatus(), q.getCurrency(), q.getSubtotal(), q.getVatRate(),
                 q.getVatAmount(), q.getTotal(), q.getValidUntil(), q.getNotes(),
-                q.getItems().stream().map(QuotationItemResponse::from).toList());
+                q.getItems().stream().map(QuotationItemResponse::from).toList(),
+                q.getVersionNo());
     }
 }

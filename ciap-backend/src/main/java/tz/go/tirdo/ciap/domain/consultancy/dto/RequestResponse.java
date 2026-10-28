@@ -3,7 +3,9 @@ package tz.go.tirdo.ciap.domain.consultancy.dto;
 import tz.go.tirdo.ciap.domain.consultancy.ConsultancyRequest;
 import tz.go.tirdo.ciap.domain.consultancy.ConsultancyType;
 import tz.go.tirdo.ciap.domain.consultancy.RequestStatus;
+import tz.go.tirdo.ciap.domain.department.RoutingStatus;
 
+import java.time.Instant;
 import java.time.LocalDate;
 
 public record RequestResponse(
@@ -18,9 +20,15 @@ public record RequestResponse(
         RequestStatus status,
         Long assignedConsultantId,
         String assignedConsultantName,
-        String reviewNotes
+        String reviewNotes,
+        Long departmentId,
+        String departmentName,
+        RoutingStatus routingStatus,
+        LocalDate assignmentDeadline,
+        Instant createdAt
 ) {
-    public static RequestResponse from(ConsultancyRequest r) {
+    public static RequestResponse from(ConsultancyRequest r, boolean includeInternalNotes) {
+        var department = r.getDepartment();
         return new RequestResponse(
                 r.getId(), r.getReferenceNo(),
                 r.getClient().getId(), r.getClient().getCompanyName(),
@@ -28,6 +36,11 @@ public record RequestResponse(
                 r.getExpectedStartDate(), r.getStatus(),
                 r.getAssignedConsultant() != null ? r.getAssignedConsultant().getId() : null,
                 r.getAssignedConsultant() != null ? r.getAssignedConsultant().getFullName() : null,
-                r.getReviewNotes());
+                includeInternalNotes ? r.getReviewNotes() : null,
+                department != null ? department.getId() : null,
+                department != null ? department.getName() : null,
+                r.getRoutingStatus(),
+                r.getAssignmentDeadline(),
+                r.getCreatedAt());
     }
 }

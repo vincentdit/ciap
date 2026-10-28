@@ -4,6 +4,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tz.go.tirdo.ciap.common.SearchTerms;
 import tz.go.tirdo.ciap.common.exception.ResourceNotFoundException;
 import tz.go.tirdo.ciap.domain.consultant.dto.CreateConsultantRequest;
 import tz.go.tirdo.ciap.domain.user.User;
@@ -49,7 +50,12 @@ public class ConsultantService {
 
     @Transactional(readOnly = true)
     public Page<Consultant> list(Pageable pageable) {
-        return consultantRepository.findAll(pageable);
+        return list(null, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Consultant> list(String q, Pageable pageable) {
+        return consultantRepository.search(SearchTerms.like(q), pageable);
     }
 
     /** Increment workload when assigned to a request; recompute availability. */

@@ -12,13 +12,15 @@ export class KnowledgeApi {
 
   constructor(private http: HttpClient) {}
 
-  listPublished(page = 0, size = 50): Observable<ApiResponse<PageResponse<ArticleResponse>>> {
-    const params = new HttpParams().set('page', page).set('size', size);
+  listPublished(page = 0, size = 10, q?: string): Observable<ApiResponse<PageResponse<ArticleResponse>>> {
+    let params = new HttpParams().set('page', page).set('size', size);
+    if (q?.trim()) params = params.set('q', q.trim());
     return this.http.get<ApiResponse<PageResponse<ArticleResponse>>>(this.base, { params });
   }
 
-  listAll(page = 0, size = 50): Observable<ApiResponse<PageResponse<ArticleResponse>>> {
-    const params = new HttpParams().set('page', page).set('size', size);
+  listAll(page = 0, size = 10, q?: string): Observable<ApiResponse<PageResponse<ArticleResponse>>> {
+    let params = new HttpParams().set('page', page).set('size', size);
+    if (q?.trim()) params = params.set('q', q.trim());
     return this.http.get<ApiResponse<PageResponse<ArticleResponse>>>(`${this.base}/all`, { params });
   }
 

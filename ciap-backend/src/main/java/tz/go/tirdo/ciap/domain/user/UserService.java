@@ -7,6 +7,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tz.go.tirdo.ciap.common.SearchTerms;
 import tz.go.tirdo.ciap.common.exception.BusinessException;
 import tz.go.tirdo.ciap.common.exception.ResourceNotFoundException;
 
@@ -48,10 +49,15 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public Page<User> list(Pageable pageable) {
+        return list(null, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<User> list(String q, Pageable pageable) {
         Pageable sorted = pageable.getSort().isSorted()
                 ? pageable
                 : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by("fullName"));
-        return userRepository.findAll(sorted);
+        return userRepository.search(SearchTerms.like(q), sorted);
     }
 
     /**

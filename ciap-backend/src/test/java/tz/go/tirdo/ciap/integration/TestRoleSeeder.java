@@ -13,16 +13,15 @@ import tz.go.tirdo.ciap.domain.user.RoleRepository;
  * schema, so {@code V2__seed_roles.sql} never runs and the roles table starts
  * empty. {@code DataInitializer} then fails looking up the ADMIN role.
  *
- * This seeder populates the five system roles and is ordered ahead of
- * {@code DataInitializer} (which has no explicit order, so it runs at the
- * default LOWEST_PRECEDENCE) so the admin bootstrap finds its role.
+ * This seeder populates the system roles and is ordered ahead of
+ * {@code DataInitializer} so the admin bootstrap finds its role.
  *
  * Scoped to the {@code test} profile: it never affects production, where
  * Flyway owns this seed.
  */
 @Component
 @Profile("test")
-@Order(0)
+@Order(-1)
 public class TestRoleSeeder implements CommandLineRunner {
 
     private final RoleRepository roleRepository;

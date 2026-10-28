@@ -15,13 +15,16 @@ public record PaymentResponse(
         String currency,
         PaymentStatus status,
         String gepgReference,
-        Instant paidAt
+        Instant paidAt,
+        String confirmedBy,
+        String confirmationNote
 ) {
     public static PaymentResponse from(Payment p) {
         return new PaymentResponse(
                 p.getId(), p.getControlNumber(), p.getRequest().getId(),
                 p.getQuotation() != null ? p.getQuotation().getId() : null,
                 p.getAmount(), p.getCurrency(), p.getStatus(),
-                p.getGepgReference(), p.getPaidAt());
+                p.getGepgReference(), p.getPaidAt(),
+                p.getConfirmedBy(), p.getConfirmationNote());
     }
 }

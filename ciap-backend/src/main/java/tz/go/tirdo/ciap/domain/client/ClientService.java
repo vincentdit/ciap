@@ -52,10 +52,17 @@ public class ClientService {
                 .email(req.email())
                 .region(req.region())
                 .physicalAddress(req.physicalAddress())
+                .country(blankToNull(req.country()))
                 .user(user)
                 .build();
 
         return clientRepository.save(client);
+    }
+
+    private static String blankToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     @Transactional(readOnly = true)

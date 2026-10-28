@@ -5,11 +5,12 @@ import { ConsultantApi, CreateConsultantRequest } from '../../core/api/consultan
 import {
   ConsultantResponse, AvailabilityStatus, ExpertCategory, EXPERT_CATEGORIES
 } from '../../core/models/api.models';
+import { ListSearchComponent, PagerComponent } from '../../shared/list-controls.component';
 
 @Component({
   selector: 'app-consultants',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ListSearchComponent, PagerComponent],
   template: `
     <header class="page-head">
       <div>
@@ -59,10 +60,12 @@ import {
       </div>
     }
 
+    <app-list-search placeholder="Name or skills" (queryChange)="onQuery($event)" />
+
     @if (loading()) {
       <div class="card load-card">Loading consultants…</div>
     } @else if (rows().length === 0) {
-      <div class="card empty"><p>No consultants registered yet.</p></div>
+      <div class="card empty"><p>{{ query ? 'No consultants match this search.' : 'No consultants registered yet.' }}</p></div>
     } @else {
       <div class="card table-card">
         <table>
@@ -81,6 +84,7 @@ import {
             }
           </tbody>
         </table>
+        <app-pager [page]="page()" [totalPages]="totalPages()" [total]="total()" (pageChange)="load($event)" />
       </div>
     }
   `,
@@ -113,19 +117,40 @@ export class ConsultantsComponent implements OnInit {
   protected showForm = signal(false);
   protected msg = signal<string | null>(null);
   protected err = signal<string | null>(null);
+  protected page = signal(0);
+  protected totalPages = signal(1);
+  protected total = signal(0);
+  protected query = '';
+
+  private readonly size = 10;
+  private ticket = 0;
 
   protected categories = EXPERT_CATEGORIES;
   protected f: CreateConsultantRequest = {
     fullName: '', category: 'ENGINEER', skills: '', yearsExperience: undefined, billingRatePerHour: undefined
   };
 
-  ngOnInit(): void { this.load(); }
+  ngOnInit(): void { this.load(0); }
 
-  private load(): void {
-    this.loading.set(true);
-    this.api.list(0, 200).subscribe({
-      next: (res) => { this.rows.set(res.data.content); this.loading.set(false); },
+  onQuery(q: string): void {
+    this.query = q;
+    this.load(0);
+  }
+
+  load(p: number): void {
+    const ticket = ++this.ticket;
+    if (this.rows().length === 0) this.loading.set(true);
+    this.api.list(p, this.size, this.query).subscribe({
+      next: (res) => {
+        if (ticket !== this.ticket) return;
+        this.rows.set(res.data.content);
+        this.page.set(res.data.page);
+        this.totalPages.set(Math.max(1, res.data.totalPages));
+        this.total.set(res.data.totalElements);
+        this.loading.set(false);
+      },
       error: (e) => {
+        if (ticket !== this.ticket) return;
         this.loading.set(false);
         this.err.set(e?.status === 403 ? 'Your role cannot view consultants.' : 'Could not load consultants.');
       }
@@ -149,7 +174,7 @@ export class ConsultantsComponent implements OnInit {
         this.msg.set('Consultant registered.');
         this.f = { fullName: '', category: 'ENGINEER', skills: '', yearsExperience: undefined, billingRatePerHour: undefined };
         this.showForm.set(false);
-        this.load();
+        this.load(0);
       },
       error: (e) => {
         this.busy.set(false);

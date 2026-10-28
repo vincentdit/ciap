@@ -6,11 +6,12 @@ import { AuthService } from '../../core/auth/auth.service';
 import {
   EventResponse, CreateEventRequest, TrainingMode, TRAINING_MODES
 } from '../../core/models/api.models';
+import { ListSearchComponent, PagerComponent } from '../../shared/list-controls.component';
 
 @Component({
   selector: 'app-training',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ListSearchComponent, PagerComponent],
   template: `
     <header class="page-head">
       <div>
@@ -24,6 +25,8 @@ import {
 
     @if (msg()) { <div class="alert alert-ok">{{ msg() }}</div> }
     @if (err()) { <div class="alert alert-error">{{ err() }}</div> }
+
+    <app-list-search placeholder="Title, description, or location" (queryChange)="onQuery($event)" />
 
     @if (showForm()) {
       <div class="card panel form-card">
@@ -58,7 +61,7 @@ import {
     @if (loading()) {
       <div class="card load-card">Loading events…</div>
     } @else if (events().length === 0) {
-      <div class="card empty"><p>No events scheduled.</p></div>
+      <div class="card empty"><p>{{ query ? 'No events match this search.' : 'No events scheduled.' }}</p></div>
     } @else {
       <div class="event-list">
         @for (e of events(); track e.id) {
@@ -92,6 +95,7 @@ import {
           </div>
         }
       </div>
+      <app-pager [page]="page()" [totalPages]="totalPages()" [total]="total()" (pageChange)="load($event)" />
     }
   `,
   styles: [`
@@ -132,19 +136,45 @@ export class TrainingComponent implements OnInit {
   protected f: CreateEventRequest = { title: '', description: '', mode: 'ONLINE', location: '', startsAt: '', capacity: 0, published: false };
   protected startsLocal = '';
   protected endsLocal = '';
+  protected page = signal(0);
+  protected totalPages = signal(1);
+  protected total = signal(0);
+  protected query = '';
 
-  ngOnInit(): void { this.load(); }
+  private readonly size = 10;
+  private ticket = 0;
+
+  ngOnInit(): void { this.load(0); }
 
   canManage(): boolean { return this.auth.hasAnyRole('ADMIN', 'MANAGER'); }
   toggleForm(): void { this.showForm.set(!this.showForm()); }
   isFull(e: EventResponse): boolean { return e.capacity > 0 && e.registeredCount >= e.capacity; }
 
-  private load(): void {
-    this.loading.set(true);
-    const src = this.canManage() ? this.api.listAll() : this.api.listPublished();
+  onQuery(q: string): void {
+    this.query = q;
+    this.load(0);
+  }
+
+  load(p: number): void {
+    const ticket = ++this.ticket;
+    if (this.events().length === 0) this.loading.set(true);
+    const src = this.canManage()
+      ? this.api.listAll(p, this.size, this.query)
+      : this.api.listPublished(p, this.size, this.query);
     src.subscribe({
-      next: (res) => { this.events.set(res.data.content); this.loading.set(false); },
-      error: () => { this.err.set('Could not load events.'); this.loading.set(false); }
+      next: (res) => {
+        if (ticket !== this.ticket) return;
+        this.events.set(res.data.content);
+        this.page.set(res.data.page);
+        this.totalPages.set(Math.max(1, res.data.totalPages));
+        this.total.set(res.data.totalElements);
+        this.loading.set(false);
+      },
+      error: () => {
+        if (ticket !== this.ticket) return;
+        this.err.set('Could not load events.');
+        this.loading.set(false);
+      }
     });
   }
 
@@ -152,7 +182,7 @@ export class TrainingComponent implements OnInit {
     this.busyId.set(e.id);
     this.clear();
     this.api.register(e.id).subscribe({
-      next: () => { this.busyId.set(null); this.msg.set('Registered for ' + e.title + '.'); this.load(); },
+      next: () => { this.busyId.set(null); this.msg.set('Registered for ' + e.title + '.'); this.load(this.page()); },
       error: (er) => {
         this.busyId.set(null);
         this.err.set(er?.status === 422 ? (er?.error?.message || 'This event is full.')
@@ -165,14 +195,14 @@ export class TrainingComponent implements OnInit {
     this.busyId.set(e.id);
     this.clear();
     this.api.cancel(e.id).subscribe({
-      next: () => { this.busyId.set(null); this.msg.set('Registration cancelled.'); this.load(); },
+      next: () => { this.busyId.set(null); this.msg.set('Registration cancelled.'); this.load(this.page()); },
       error: () => { this.busyId.set(null); this.err.set('Could not cancel.'); }
     });
   }
 
   publish(e: EventResponse): void {
     this.api.publish(e.id).subscribe({
-      next: () => { this.msg.set('Event published.'); this.load(); },
+      next: () => { this.msg.set('Event published.'); this.load(this.page()); },
       error: () => this.err.set('Could not publish.')
     });
   }
@@ -198,7 +228,7 @@ export class TrainingComponent implements OnInit {
         this.f = { title: '', description: '', mode: 'ONLINE', location: '', startsAt: '', capacity: 0, published: false };
         this.startsLocal = ''; this.endsLocal = '';
         this.showForm.set(false);
-        this.load();
+        this.load(this.page());
       },
       error: (e) => { this.busy.set(false); this.err.set(e?.error?.message || 'Could not save the event.'); }
     });

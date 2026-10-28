@@ -47,4 +47,11 @@ public class Payment extends Auditable {
 
     @Column(name = "paid_at")
     private Instant paidAt;
+
+    /** Account that confirmed the settlement. Empty when no signed-in user confirmed it. */
+    @Column(name = "confirmed_by", length = 150)
+    private String confirmedBy;
+
+    @Column(name = "confirmation_note", length = 500)
+    private String confirmationNote;
 }

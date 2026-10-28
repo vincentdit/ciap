@@ -27,8 +27,9 @@ export class UserApi {
 
   constructor(private http: HttpClient) {}
 
-  list(page = 0, size = 100): Observable<ApiResponse<PageResponse<UserAccount>>> {
-    const params = new HttpParams().set('page', page).set('size', size);
+  list(page = 0, size = 20, q?: string): Observable<ApiResponse<PageResponse<UserAccount>>> {
+    let params = new HttpParams().set('page', page).set('size', size);
+    if (q?.trim()) params = params.set('q', q.trim());
     return this.http.get<ApiResponse<PageResponse<UserAccount>>>(`${this.base}/users`, { params });
   }
 

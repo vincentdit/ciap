@@ -22,16 +22,18 @@ public class KnowledgeController {
 
     /** Published articles — visible to any authenticated user. */
     @GetMapping
-    public ResponseEntity<ApiResponse<PageResponse<ArticleResponse>>> listPublished(Pageable pageable) {
-        var page = service.listPublished(pageable).map(ArticleResponse::summary);
+    public ResponseEntity<ApiResponse<PageResponse<ArticleResponse>>> listPublished(
+            @RequestParam(required = false) String q, Pageable pageable) {
+        var page = service.listPublished(q, pageable).map(ArticleResponse::summary);
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(page)));
     }
 
     /** All articles including drafts — staff only. */
     @GetMapping("/all")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER','EXPERT')")
-    public ResponseEntity<ApiResponse<PageResponse<ArticleResponse>>> listAll(Pageable pageable) {
-        var page = service.listAll(pageable).map(ArticleResponse::summary);
+    public ResponseEntity<ApiResponse<PageResponse<ArticleResponse>>> listAll(
+            @RequestParam(required = false) String q, Pageable pageable) {
+        var page = service.listAll(q, pageable).map(ArticleResponse::summary);
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(page)));
     }
 

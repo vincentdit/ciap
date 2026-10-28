@@ -54,6 +54,8 @@ public class QuotationService {
                     "A quotation can only be created while the request is UNDER_REVIEW or QUOTED (current: " + s + ")");
         }
 
+        List<Quotation> previous = quotationRepository.findByRequestIdOrderByIdDesc(request.getId());
+        int nextVersion = previous.stream().mapToInt(Quotation::getVersionNo).max().orElse(0) + 1;
         BigDecimal vatRate = dto.vatRate() != null ? dto.vatRate() : DEFAULT_VAT;
 
         Quotation quotation = Quotation.builder()
@@ -64,6 +66,8 @@ public class QuotationService {
                 .vatRate(vatRate)
                 .validUntil(dto.validUntil())
                 .notes(dto.notes())
+                .versionNo(nextVersion)
+                .supersedes(previous.isEmpty() ? null : previous.get(0))
                 .build();
 
         BigDecimal subtotal = BigDecimal.ZERO;
@@ -93,6 +97,7 @@ public class QuotationService {
         if (q.getStatus() != QuotationStatus.DRAFT) {
             throw new BusinessException("Only a DRAFT quotation can be sent (current: " + q.getStatus() + ")");
         }
+        expireSent(q);
         q.setStatus(QuotationStatus.SENT);
         return QuotationResponse.from(q);
     }
@@ -105,6 +110,10 @@ public class QuotationService {
         if (q.getStatus() != QuotationStatus.SENT) {
             throw new BusinessException("Only a SENT quotation can be accepted (current: " + q.getStatus() + ")");
         }
+        if (quotationRepository.existsByRequestIdAndStatus(q.getRequest().getId(), QuotationStatus.ACCEPTED)) {
+            throw new BusinessException("This request already has an accepted quotation");
+        }
+        expireSent(q);
         q.setStatus(QuotationStatus.ACCEPTED);
 
         Contract existing = contractRepository.findByQuotationId(q.getId()).orElse(null);
@@ -139,6 +148,13 @@ public class QuotationService {
         accessGuard.assertCanReadRequest(request);
         return quotationRepository.findByRequestIdOrderByIdDesc(requestId)
                 .stream().map(QuotationResponse::from).toList();
+    }
+
+    private void expireSent(Quotation current) {
+        quotationRepository.findByRequestIdAndStatus(current.getRequest().getId(), QuotationStatus.SENT)
+                .stream()
+                .filter(other -> !other.getId().equals(current.getId()))
+                .forEach(other -> other.setStatus(QuotationStatus.EXPIRED));
     }
 
     private Quotation getEntity(Long id) {

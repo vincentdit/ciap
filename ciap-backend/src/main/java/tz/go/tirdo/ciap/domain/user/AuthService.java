@@ -172,7 +172,7 @@ public class AuthService {
                 || request.roles().size() != 1
                 || request.roles().contains(RoleName.CLIENT)) {
             throw new BusinessException(
-                    "Choose one staff role: administrator, manager, expert, or finance");
+                    "Choose one staff role: administrator, manager, head of department, expert, or finance");
         }
         if (userRepository.existsByEmail(request.email())) {
             throw new DuplicateResourceException(

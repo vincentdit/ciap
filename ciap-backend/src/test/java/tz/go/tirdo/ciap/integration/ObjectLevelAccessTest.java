@@ -25,6 +25,7 @@ import tz.go.tirdo.ciap.domain.consultancy.dto.CreateRequestDto;
 import tz.go.tirdo.ciap.domain.consultancy.dto.RequestResponse;
 import tz.go.tirdo.ciap.domain.consultancy.dto.ReviewDto;
 import tz.go.tirdo.ciap.domain.knowledge.KnowledgeService;
+import tz.go.tirdo.ciap.domain.user.UserRepository;
 import tz.go.tirdo.ciap.domain.knowledge.dto.CreateArticleRequest;
 import tz.go.tirdo.ciap.domain.training.TrainingMode;
 import tz.go.tirdo.ciap.domain.training.TrainingService;
@@ -60,6 +61,7 @@ class ObjectLevelAccessTest {
     @Autowired QuotationService quotationService;
     @Autowired KnowledgeService knowledgeService;
     @Autowired TrainingService trainingService;
+    @Autowired UserRepository userRepository;
 
     private Client owner;
     private Client other;
@@ -114,6 +116,7 @@ class ObjectLevelAccessTest {
         var quote = quotationService.create(new CreateQuotationRequest(
                 ownedRequest.id(), new BigDecimal("0.18"), LocalDate.now().plusDays(30), null,
                 List.of(new QuotationItemDto("Audit", BigDecimal.ONE, new BigDecimal("1000")))));
+        assertThat(quote.versionNo()).isEqualTo(1);
         quotationService.send(quote.id());
 
         mockMvc.perform(get("/quotations/" + quote.id())
@@ -145,6 +148,14 @@ class ObjectLevelAccessTest {
         mockMvc.perform(get("/documents/" + documentId + "/download")
                         .header("Authorization", "Bearer " + otherToken))
                 .andExpect(status().isNotFound());
+
+        MockMultipartFile fakePdf = new MockMultipartFile(
+                "file", "notes.pdf", "application/pdf", "this is not a pdf".getBytes());
+        mockMvc.perform(multipart("/documents")
+                        .file(fakePdf)
+                        .param("requestId", ownedRequest.id().toString())
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isUnprocessableEntity());
 
         MockMultipartFile bad = new MockMultipartFile(
                 "file", "payload.exe", "application/octet-stream", "MZ".getBytes());
@@ -223,10 +234,22 @@ class ObjectLevelAccessTest {
                 .andExpect(status().is4xxClientError());
     }
 
+    @Test
+    @DisplayName("a disabled account cannot keep using its access token")
+    void disabledAccountCannotUseItsToken() throws Exception {
+        var user = userRepository.findByEmail(owner.getEmail()).orElseThrow();
+        user.setEnabled(false);
+        userRepository.save(user);
+
+        mockMvc.perform(get("/clients/me")
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isForbidden());
+    }
+
     private Client register(String email, String tin) {
         return clientService.register(new ClientRegistrationRequest(
                 "Org " + tin, tin, ClientType.INDUSTRY, IndustryCategory.MANUFACTURING,
-                "Contact", "+255700000000", email, "Client@12345", "Dar es Salaam", "Plot 1"));
+                "Contact", "+255700000000", email, "Client@12345", "Dar es Salaam", "Plot 1", null));
     }
 
     private String tokenFor(String email, String password, String field) throws Exception {

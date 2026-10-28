@@ -51,9 +51,17 @@ import { AuthService } from '../../core/auth/auth.service';
 
             <div class="field">
               <label for="password">Password</label>
-              <input id="password" type="password" formControlName="password"
-                     [class.invalid]="invalid('password')" autocomplete="current-password"
-                     placeholder="••••••••">
+              <div class="password-wrap">
+                <input id="password" [type]="showPassword() ? 'text' : 'password'" formControlName="password"
+                       [class.invalid]="invalid('password')" autocomplete="current-password"
+                       placeholder="••••••••">
+                <button type="button" class="show-password"
+                        (click)="showPassword.set(!showPassword())"
+                        [attr.aria-pressed]="showPassword()"
+                        [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'">
+                  {{ showPassword() ? 'Hide' : 'Show' }}
+                </button>
+              </div>
               @if (invalid('password')) {
                 <div class="error-text">Password is required.</div>
               }
@@ -102,6 +110,16 @@ import { AuthService } from '../../core/auth/auth.service';
     .auth-card h2 { font-size: 1.7rem; margin-bottom: 0.3rem; }
     .sub { margin: 0 0 1.6rem; font-size: 0.92rem; }
     .foot { margin-top: 1.4rem; font-size: 0.9rem; color: var(--ink-soft); }
+    .password-wrap { position: relative; }
+    .password-wrap input { padding-right: 4.4rem; }
+    .show-password {
+      position: absolute; right: 0.35rem; top: 50%; transform: translateY(-50%);
+      border: 0; background: transparent; color: var(--teal-700);
+      font-family: var(--font-body); font-weight: 700; font-size: 0.8rem;
+      cursor: pointer; padding: 0.3rem 0.45rem; border-radius: 4px;
+    }
+    .show-password:hover { background: var(--teal-50); }
+    .show-password:focus-visible { outline: 2px solid var(--teal-500); outline-offset: 1px; }
 
     @media (max-width: 860px) {
       .auth-wrap { grid-template-columns: 1fr; }
@@ -117,6 +135,7 @@ export class LoginComponent {
 
   protected loading = signal(false);
   protected error = signal<string | null>(null);
+  protected showPassword = signal(false);
   protected passwordChanged = signal(this.route.snapshot.queryParamMap.get('changed') === '1');
   protected sessionExpired = signal(
     this.route.snapshot.queryParamMap.get('expired') === '1' || this.auth.consumeExpiredNotice()

@@ -4,11 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { KnowledgeApi } from '../../core/api/knowledge.api';
 import { AuthService } from '../../core/auth/auth.service';
 import { ArticleResponse, CreateArticleRequest } from '../../core/models/api.models';
+import { ListSearchComponent, PagerComponent } from '../../shared/list-controls.component';
 
 @Component({
   selector: 'app-knowledge',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ListSearchComponent, PagerComponent],
   template: `
     <header class="page-head">
       <div>
@@ -44,6 +45,8 @@ import { ArticleResponse, CreateArticleRequest } from '../../core/models/api.mod
       </div>
     }
 
+    <app-list-search placeholder="Title, summary, or category" (queryChange)="onQuery($event)" />
+
     @if (canauthor()) {
       <div class="toggle-line">
         <button class="chip" [class.on]="!showAll()" (click)="setScope(false)">Published</button>
@@ -54,7 +57,7 @@ import { ArticleResponse, CreateArticleRequest } from '../../core/models/api.mod
     @if (loading()) {
       <div class="card load-card">Loading articles…</div>
     } @else if (articles().length === 0) {
-      <div class="card empty"><p>No articles yet.</p></div>
+      <div class="card empty"><p>{{ query ? 'No articles match this search.' : 'No articles yet.' }}</p></div>
     } @else {
       <div class="article-grid">
         @for (a of articles(); track a.id) {
@@ -77,6 +80,7 @@ import { ArticleResponse, CreateArticleRequest } from '../../core/models/api.mod
           </article>
         }
       </div>
+      <app-pager [page]="page()" [totalPages]="totalPages()" [total]="total()" (pageChange)="load($event)" />
     }
   `,
   styles: [`
@@ -115,23 +119,49 @@ export class KnowledgeComponent implements OnInit {
   protected fullBody = signal<string>('');
   protected msg = signal<string | null>(null);
   protected err = signal<string | null>(null);
+  protected page = signal(0);
+  protected totalPages = signal(1);
+  protected total = signal(0);
+  protected query = '';
+
+  private readonly size = 10;
+  private ticket = 0;
 
   protected f: CreateArticleRequest = { title: '', category: '', summary: '', body: '', published: false };
 
-  ngOnInit(): void { this.load(); }
+  ngOnInit(): void { this.load(0); }
 
   canauthor(): boolean { return this.auth.hasAnyRole('ADMIN', 'MANAGER', 'EXPERT'); }
   canpublish(): boolean { return this.auth.hasAnyRole('ADMIN', 'MANAGER'); }
 
   toggleForm(): void { this.showForm.set(!this.showForm()); }
-  setScope(all: boolean): void { this.showAll.set(all); this.load(); }
+  setScope(all: boolean): void { this.showAll.set(all); this.load(0); }
 
-  private load(): void {
-    this.loading.set(true);
-    const src = this.showAll() && this.canauthor() ? this.api.listAll() : this.api.listPublished();
+  onQuery(q: string): void {
+    this.query = q;
+    this.load(0);
+  }
+
+  load(p: number): void {
+    const ticket = ++this.ticket;
+    if (this.articles().length === 0) this.loading.set(true);
+    const src = this.showAll() && this.canauthor()
+      ? this.api.listAll(p, this.size, this.query)
+      : this.api.listPublished(p, this.size, this.query);
     src.subscribe({
-      next: (res) => { this.articles.set(res.data.content); this.loading.set(false); },
-      error: () => { this.err.set('Could not load articles.'); this.loading.set(false); }
+      next: (res) => {
+        if (ticket !== this.ticket) return;
+        this.articles.set(res.data.content);
+        this.page.set(res.data.page);
+        this.totalPages.set(Math.max(1, res.data.totalPages));
+        this.total.set(res.data.totalElements);
+        this.loading.set(false);
+      },
+      error: () => {
+        if (ticket !== this.ticket) return;
+        this.err.set('Could not load articles.');
+        this.loading.set(false);
+      }
     });
   }
 
@@ -159,7 +189,7 @@ export class KnowledgeComponent implements OnInit {
         this.msg.set('Article saved.');
         this.f = { title: '', category: '', summary: '', body: '', published: false };
         this.showForm.set(false);
-        this.load();
+        this.load(0);
       },
       error: (e) => { this.busy.set(false); this.err.set(e?.error?.message || 'Could not save the article.'); }
     });
@@ -167,7 +197,7 @@ export class KnowledgeComponent implements OnInit {
 
   publish(a: ArticleResponse): void {
     this.api.publish(a.id).subscribe({
-      next: () => { this.msg.set('Article published.'); this.load(); },
+      next: () => { this.msg.set('Article published.'); this.load(this.page()); },
       error: () => this.err.set('Could not publish.')
     });
   }

@@ -64,6 +64,7 @@ export interface ClientRegistrationRequest {
   password: string;
   region?: string;
   physicalAddress?: string;
+  country?: string;
 }
 
 export interface ClientResponse {
@@ -77,6 +78,7 @@ export interface ClientResponse {
   email: string;
   region: string | null;
   physicalAddress: string | null;
+  country: string | null;
 }
 
 // ---- Consultancy request ----
@@ -109,6 +111,11 @@ export interface RequestResponse {
   assignedConsultantId: number | null;
   assignedConsultantName: string | null;
   reviewNotes: string | null;
+  departmentId: number | null;
+  departmentName: string | null;
+  routingStatus: 'ROUTED' | 'UNMAPPED' | 'NO_HOD' | null;
+  assignmentDeadline: string | null;
+  createdAt: string | null;
 }
 
 // Human-readable labels for the select inputs.
@@ -156,6 +163,69 @@ export interface ReviewDto {
 
 export interface AssignDto {
   consultantId: number;
+  note?: string;
+  deadline?: string;
+}
+
+export interface ReassignDto {
+  consultantId: number;
+  reason: string;
+  note?: string;
+  deadline?: string;
+}
+
+export interface EligibleAssignee {
+  consultantId: number;
+  fullName: string;
+  role: string;
+  category: string;
+  skills: string | null;
+  activeAssignments: number;
+  availabilityStatus: string;
+}
+
+export interface AssignmentRecord {
+  id: number;
+  consultantId: number;
+  consultantName: string;
+  previousConsultantId: number | null;
+  previousConsultantName: string | null;
+  assignedBy: string;
+  note: string | null;
+  reason: string | null;
+  deadline: string | null;
+  createdAt: string;
+}
+
+export interface DepartmentSummary {
+  id: number;
+  name: string;
+  code: string;
+  active: boolean;
+  hodUserId: number | null;
+  hodName: string | null;
+  hodEmail: string | null;
+}
+
+export interface DepartmentQueueSummary {
+  submitted: number;
+  underReview: number;
+  awaitingAssignment: number;
+  assigned: number;
+  inProgress: number;
+  overdue: number;
+  awaitingClose: number;
+  rejected: number;
+  unrouted: number;
+}
+
+export interface DepartmentMember {
+  userId: number;
+  fullName: string;
+  email: string;
+  role: string;
+  canReceiveWork: boolean;
+  active: boolean;
 }
 
 // ---- Consultant ----
@@ -208,6 +278,7 @@ export interface QuotationResponse {
   total: number;
   validUntil: string | null;
   notes: string | null;
+  versionNo: number;
 }
 
 export interface ContractResponse {
@@ -236,11 +307,58 @@ export interface PaymentResponse {
   status: PaymentStatus;
   gepgReference: string | null;
   paidAt: string | null;
+  confirmedBy: string | null;
+  confirmationNote: string | null;
 }
 
 export interface GepgCallbackRequest {
   controlNumber: string;
   gepgReference: string;
+  confirmationNote?: string;
+}
+
+export interface FinancePayment {
+  id: number;
+  controlNumber: string;
+  requestId: number;
+  requestReference: string;
+  clientName: string;
+  quotationNo: string | null;
+  amount: number;
+  currency: string;
+  status: PaymentStatus;
+  gepgReference: string | null;
+  paidAt: string | null;
+  createdAt: string | null;
+  confirmedBy: string | null;
+  confirmationNote: string | null;
+  requestStatus: string;
+  mismatch: boolean;
+}
+
+export interface FinanceSummary {
+  quoted: number;
+  pendingVerification: number;
+  verified: number;
+  failed: number;
+  mismatches: number;
+}
+
+export interface RequestEvent {
+  id: number;
+  requestId: number;
+  fromStatus: string | null;
+  toStatus: string;
+  actor: string;
+  reason: string | null;
+  createdAt: string;
+}
+
+export interface AppNotification {
+  id: number;
+  message: string;
+  read: boolean;
+  createdAt: string;
 }
 
 // ---- Project ----

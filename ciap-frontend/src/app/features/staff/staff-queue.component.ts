@@ -2,20 +2,24 @@ import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { RequestApi } from '../../core/api/request.api';
+import { AuthService } from '../../core/auth/auth.service';
 import { RequestResponse, RequestStatus, PageResponse } from '../../core/models/api.models';
 import { statusLabel, statusPillClass } from './workflow-rules';
+import { ListSearchComponent, PagerComponent } from '../../shared/list-controls.component';
 
 @Component({
   selector: 'app-staff-queue',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, ListSearchComponent, PagerComponent],
   template: `
     <header class="page-head">
       <div>
         <h1>Request queue</h1>
-        <p class="muted">All consultancy requests across the organisation.</p>
+        <p class="muted">{{ queueIntro() }}</p>
       </div>
     </header>
+
+    <app-list-search placeholder="Reference, title, client, or assignee" (queryChange)="onQuery($event)" />
 
     <div class="filters">
       <button class="chip" [class.on]="filter() === 'ALL'" (click)="setFilter('ALL')">All</button>
@@ -28,8 +32,8 @@ import { statusLabel, statusPillClass } from './workflow-rules';
       <div class="card load-card">Loading queue…</div>
     } @else if (error()) {
       <div class="alert alert-error">{{ error() }}</div>
-    } @else if (visible().length === 0) {
-      <div class="card empty"><p>No requests match this filter.</p></div>
+    } @else if (rows().length === 0) {
+      <div class="card empty"><p>{{ query ? 'No requests match this search.' : 'No requests match this filter.' }}</p></div>
     } @else {
       <div class="card table-card">
         <table>
@@ -39,7 +43,7 @@ import { statusLabel, statusPillClass } from './workflow-rules';
             </tr>
           </thead>
           <tbody>
-            @for (r of visible(); track r.id) {
+            @for (r of rows(); track r.id) {
               <tr>
                 <td class="ref">{{ r.referenceNo }}</td>
                 <td class="title">{{ r.title }}</td>
@@ -55,13 +59,7 @@ import { statusLabel, statusPillClass } from './workflow-rules';
         </table>
       </div>
 
-      @if (totalPages() > 1) {
-        <div class="pager">
-          <button class="btn btn-ghost" [disabled]="page() === 0" (click)="go(page() - 1)">← Previous</button>
-          <span class="muted">Page {{ page() + 1 }} of {{ totalPages() }}</span>
-          <button class="btn btn-ghost" [disabled]="page() + 1 >= totalPages()" (click)="go(page() + 1)">Next →</button>
-        </div>
-      }
+      <app-pager [page]="page()" [totalPages]="totalPages()" [total]="total()" (pageChange)="go($event)" />
     }
   `,
   styles: [`
@@ -98,49 +96,60 @@ import { statusLabel, statusPillClass } from './workflow-rules';
     .type { color: var(--ink-soft); }
     .action-col { text-align: right; white-space: nowrap; }
     .btn.sm { padding: 0.4rem 0.7rem; font-size: 0.85rem; }
-
-    .pager { display: flex; align-items: center; justify-content: center; gap: 1.2rem; margin-top: 1.4rem; }
     @media (max-width: 760px) { .type, thead th:nth-child(4) { display: none; } }
   `]
 })
 export class StaffQueueComponent implements OnInit {
   private api = inject(RequestApi);
+  private auth = inject(AuthService);
 
   protected loading = signal(true);
   protected error = signal<string | null>(null);
-  protected all = signal<RequestResponse[]>([]);
+  protected rows = signal<RequestResponse[]>([]);
   protected filter = signal<RequestStatus | 'ALL'>('ALL');
   protected page = signal(0);
   protected totalPages = signal(1);
+  protected total = signal(0);
+  protected query = '';
 
   protected readonly quickFilters: RequestStatus[] = [
     'SUBMITTED', 'UNDER_REVIEW', 'QUOTED', 'AWAITING_PAYMENT', 'PAID', 'ASSIGNED', 'IN_EXECUTION', 'REPORT_SUBMITTED'
   ];
 
-  private readonly size = 50;
+  private readonly size = 10;
+  private ticket = 0;
 
   ngOnInit(): void { this.load(0); }
 
   go(p: number): void { this.load(p); }
-  setFilter(f: RequestStatus | 'ALL'): void { this.filter.set(f); }
 
-  visible(): RequestResponse[] {
-    const f = this.filter();
-    return f === 'ALL' ? this.all() : this.all().filter(r => r.status === f);
+  onQuery(q: string): void {
+    this.query = q;
+    this.load(0);
+  }
+
+  setFilter(f: RequestStatus | 'ALL'): void {
+    this.filter.set(f);
+    this.load(0);
   }
 
   private load(p: number): void {
-    this.loading.set(true);
+    const ticket = ++this.ticket;
+    if (this.rows().length === 0) this.loading.set(true);
     this.error.set(null);
-    this.api.list(p, this.size).subscribe({
+    const status = this.filter() === 'ALL' ? undefined : this.filter();
+    this.api.list(p, this.size, { status, q: this.query }).subscribe({
       next: (res) => {
+        if (ticket !== this.ticket) return;
         const page: PageResponse<RequestResponse> = res.data;
-        this.all.set(page.content);
+        this.rows.set(page.content);
         this.page.set(page.page);
         this.totalPages.set(Math.max(1, page.totalPages));
+        this.total.set(page.totalElements);
         this.loading.set(false);
       },
       error: (err) => {
+        if (ticket !== this.ticket) return;
         this.error.set(err?.status === 403
           ? 'Your role does not have access to the request queue.'
           : 'Could not load the queue.');
@@ -152,4 +161,9 @@ export class StaffQueueComponent implements OnInit {
   label(s: RequestStatus): string { return statusLabel(s); }
   pill(s: RequestStatus): string { return statusPillClass(s); }
   typeLabel(t: string): string { return t.charAt(0) + t.slice(1).toLowerCase(); }
+  queueIntro(): string {
+    return this.auth.hasAnyRole('HOD') && !this.auth.hasAnyRole('ADMIN', 'MANAGER', 'FINANCE')
+      ? 'Requests in your department.'
+      : 'Consultancy requests you are allowed to see.';
+  }
 }

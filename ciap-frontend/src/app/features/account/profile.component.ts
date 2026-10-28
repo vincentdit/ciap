@@ -53,6 +53,7 @@ import { ClientResponse } from '../../core/models/api.models';
             <div><dt>Type</dt><dd>{{ label(org.clientType) }}</dd></div>
             <div><dt>Industry</dt><dd>{{ label(org.industryCategory) }}</dd></div>
             @if (org.tin) { <div><dt>TIN</dt><dd>{{ org.tin }}</dd></div> }
+            @if (org.country) { <div><dt>Country</dt><dd>{{ org.country }}</dd></div> }
             @if (org.region) { <div><dt>Region</dt><dd>{{ org.region }}</dd></div> }
             @if (org.physicalAddress) { <div><dt>Address</dt><dd>{{ org.physicalAddress }}</dd></div> }
           </dl>

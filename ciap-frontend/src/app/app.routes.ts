@@ -2,6 +2,8 @@ import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { staffGuard } from './core/guards/staff.guard';
 import { adminGuard } from './core/guards/admin.guard';
+import { financeGuard } from './core/guards/finance.guard';
+import { hodGuard } from './core/guards/hod.guard';
 
 export const routes: Routes = [
   {
@@ -29,6 +31,21 @@ export const routes: Routes = [
       {
         path: 'requests',
         loadComponent: () => import('./features/requests/request-list.component').then(m => m.RequestListComponent)
+      },
+      {
+        path: 'finance',
+        canActivate: [financeGuard],
+        loadComponent: () => import('./features/finance/finance.component').then(m => m.FinanceComponent)
+      },
+      {
+        path: 'department',
+        canActivate: [hodGuard],
+        loadComponent: () => import('./features/department/department.component').then(m => m.DepartmentComponent)
+      },
+      {
+        path: 'staff/departments',
+        canActivate: [adminGuard],
+        loadComponent: () => import('./features/department/departments-admin.component').then(m => m.DepartmentsAdminComponent)
       },
       {
         path: 'staff/requests',
@@ -72,6 +89,10 @@ export const routes: Routes = [
       {
         path: 'training',
         loadComponent: () => import('./features/content/training.component').then(m => m.TrainingComponent)
+      },
+      {
+        path: 'notices',
+        loadComponent: () => import('./features/account/notices.component').then(m => m.NoticesComponent)
       },
       {
         path: 'profile',

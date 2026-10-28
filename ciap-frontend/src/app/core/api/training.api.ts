@@ -12,13 +12,15 @@ export class TrainingApi {
 
   constructor(private http: HttpClient) {}
 
-  listPublished(page = 0, size = 50): Observable<ApiResponse<PageResponse<EventResponse>>> {
-    const params = new HttpParams().set('page', page).set('size', size);
+  listPublished(page = 0, size = 10, q?: string): Observable<ApiResponse<PageResponse<EventResponse>>> {
+    let params = new HttpParams().set('page', page).set('size', size);
+    if (q?.trim()) params = params.set('q', q.trim());
     return this.http.get<ApiResponse<PageResponse<EventResponse>>>(this.base, { params });
   }
 
-  listAll(page = 0, size = 50): Observable<ApiResponse<PageResponse<EventResponse>>> {
-    const params = new HttpParams().set('page', page).set('size', size);
+  listAll(page = 0, size = 10, q?: string): Observable<ApiResponse<PageResponse<EventResponse>>> {
+    let params = new HttpParams().set('page', page).set('size', size);
+    if (q?.trim()) params = params.set('q', q.trim());
     return this.http.get<ApiResponse<PageResponse<EventResponse>>>(`${this.base}/all`, { params });
   }
 

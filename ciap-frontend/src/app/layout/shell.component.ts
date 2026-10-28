@@ -2,6 +2,7 @@ import { Component, ElementRef, HostListener, inject, viewChild } from '@angular
 import { CommonModule } from '@angular/common';
 import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { AuthService } from '../core/auth/auth.service';
+import { I18nService } from '../core/i18n/i18n.service';
 
 @Component({
   selector: 'app-shell',
@@ -20,6 +21,9 @@ import { AuthService } from '../core/auth/auth.service';
           <a routerLink="/dashboard" routerLinkActive="active" class="nav-item">
             <span class="dot"></span> Dashboard
           </a>
+          <a routerLink="/notices" routerLinkActive="active" class="nav-item">
+            <span class="dot"></span> {{ i18n.t('nav.notices') }}
+          </a>
           <a routerLink="/requests" routerLinkActive="active" class="nav-item">
             <span class="dot"></span> Consultancy Requests
           </a>
@@ -35,6 +39,16 @@ import { AuthService } from '../core/auth/auth.service';
 
           @if (isStaff()) {
             <div class="nav-group">Staff</div>
+            @if (isHod()) {
+              <a routerLink="/department" routerLinkActive="active" class="nav-item">
+                <span class="dot"></span> Department
+              </a>
+            }
+            @if (isFinance()) {
+              <a routerLink="/finance" routerLinkActive="active" class="nav-item">
+                <span class="dot"></span> Finance
+              </a>
+            }
             <a routerLink="/staff/requests" routerLinkActive="active" class="nav-item">
               <span class="dot"></span> Request Queue
             </a>
@@ -44,6 +58,9 @@ import { AuthService } from '../core/auth/auth.service';
               </a>
             }
             @if (isAdmin()) {
+              <a routerLink="/staff/departments" routerLinkActive="active" class="nav-item">
+                <span class="dot"></span> Departments
+              </a>
               <a routerLink="/staff/users" routerLinkActive="active" class="nav-item">
                 <span class="dot"></span> User management
               </a>
@@ -79,6 +96,9 @@ import { AuthService } from '../core/auth/auth.service';
         </header>
 
         <main class="content">
+          @if (auth.expiryWarning()) {
+            <div class="alert alert-ok">{{ i18n.t('session.expiring') }}</div>
+          }
           <router-outlet />
         </main>
       </div>
@@ -220,6 +240,7 @@ import { AuthService } from '../core/auth/auth.service';
 })
 export class ShellComponent {
   protected auth = inject(AuthService);
+  protected i18n = inject(I18nService);
   private router = inject(Router);
   private accountRef = viewChild<ElementRef<HTMLElement>>('account');
   protected menuOpen = false;
@@ -232,12 +253,17 @@ export class ShellComponent {
   }
 
   primaryRole(): string {
-    const r = this.auth.roles()[0] ?? '';
-    return r.replace(/^ROLE_/, '').toLowerCase();
+    const r = (this.auth.roles()[0] ?? '').replace(/^ROLE_/, '');
+    if (r === 'HOD') return 'Head of Department';
+    return r.toLowerCase();
   }
 
   isStaff(): boolean {
-    return this.auth.hasAnyRole('MANAGER', 'ADMIN', 'FINANCE', 'EXPERT');
+    return this.auth.hasAnyRole('MANAGER', 'ADMIN', 'FINANCE', 'EXPERT', 'HOD');
+  }
+
+  isHod(): boolean {
+    return this.auth.hasAnyRole('HOD', 'ADMIN');
   }
 
   canManageConsultants(): boolean {
@@ -246,6 +272,10 @@ export class ShellComponent {
 
   isAdmin(): boolean {
     return this.auth.hasAnyRole('ADMIN');
+  }
+
+  isFinance(): boolean {
+    return this.auth.hasAnyRole('FINANCE', 'ADMIN');
   }
 
   toggleMenu(event: MouseEvent): void {

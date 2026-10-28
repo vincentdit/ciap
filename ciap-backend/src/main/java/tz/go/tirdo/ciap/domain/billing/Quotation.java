@@ -57,6 +57,15 @@ public class Quotation extends Auditable {
     @Column(length = 1000)
     private String notes;
 
+    @Column(name = "version_no", nullable = false)
+    @Builder.Default
+    private int versionNo = 1;
+
+    /** Previous quotation this one replaces, when a newer version is issued. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supersedes_id")
+    private Quotation supersedes;
+
     @OneToMany(mappedBy = "quotation", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<QuotationItem> items = new ArrayList<>();

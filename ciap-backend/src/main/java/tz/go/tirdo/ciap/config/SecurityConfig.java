@@ -19,6 +19,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import tz.go.tirdo.ciap.security.AppSecurityProperties;
+import tz.go.tirdo.ciap.security.CorrelationIdFilter;
 import tz.go.tirdo.ciap.security.JwtAuthenticationFilter;
 import tz.go.tirdo.ciap.security.JwtProperties;
 
@@ -30,10 +31,14 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
+    private final CorrelationIdFilter correlationIdFilter;
     private final AppSecurityProperties securityProperties;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtFilter, AppSecurityProperties securityProperties) {
+    public SecurityConfig(JwtAuthenticationFilter jwtFilter,
+                          CorrelationIdFilter correlationIdFilter,
+                          AppSecurityProperties securityProperties) {
         this.jwtFilter = jwtFilter;
+        this.correlationIdFilter = correlationIdFilter;
         this.securityProperties = securityProperties;
     }
 
@@ -58,7 +63,8 @@ public class SecurityConfig {
                     }
                     auth.anyRequest().authenticated();
                 })
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(correlationIdFilter, JwtAuthenticationFilter.class);
         return http.build();
     }
 
