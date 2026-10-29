@@ -3,8 +3,12 @@ package tz.go.tirdo.ciap.domain.training;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
+import java.util.Optional;
 
 public interface TrainingEventRepository extends JpaRepository<TrainingEvent, Long> {
     Page<TrainingEvent> findByPublishedTrue(Pageable pageable);
@@ -27,4 +31,8 @@ public interface TrainingEventRepository extends JpaRepository<TrainingEvent, Lo
                or lower(coalesce(e.location, '')) like :q
             """)
     Page<TrainingEvent> searchAll(@Param("q") String q, Pageable pageable);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select e from TrainingEvent e where e.id = :id")
+    Optional<TrainingEvent> findByIdForUpdate(@Param("id") Long id);
 }

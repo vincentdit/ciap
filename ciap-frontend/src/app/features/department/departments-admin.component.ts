@@ -14,7 +14,7 @@ import { DepartmentSummary, RequestResponse } from '../../core/models/api.models
   template: `
     <header class="page-head">
       <div>
-        <h1>Departments</h1>
+        <h1>HOD management</h1>
         <p class="muted">Each service line has one Head of Department. Requests that cannot be routed stay here until you choose a department.</p>
       </div>
     </header>

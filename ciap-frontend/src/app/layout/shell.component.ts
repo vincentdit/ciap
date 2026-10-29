@@ -24,6 +24,9 @@ import { I18nService } from '../core/i18n/i18n.service';
           <a routerLink="/notices" routerLinkActive="active" class="nav-item">
             <span class="dot"></span> {{ i18n.t('nav.notices') }}
           </a>
+          <a routerLink="/services" routerLinkActive="active" class="nav-item">
+            <span class="dot"></span> Consultancy Services
+          </a>
           <a routerLink="/requests" routerLinkActive="active" class="nav-item">
             <span class="dot"></span> Consultancy Requests
           </a>
@@ -59,7 +62,10 @@ import { I18nService } from '../core/i18n/i18n.service';
             }
             @if (isAdmin()) {
               <a routerLink="/staff/departments" routerLinkActive="active" class="nav-item">
-                <span class="dot"></span> Departments
+                <span class="dot"></span> HOD management
+              </a>
+              <a routerLink="/staff/catalogue" routerLinkActive="active" class="nav-item">
+                <span class="dot"></span> Service prices
               </a>
               <a routerLink="/staff/users" routerLinkActive="active" class="nav-item">
                 <span class="dot"></span> User management

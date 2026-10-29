@@ -96,6 +96,9 @@ export interface CreateRequestDto {
   title: string;
   description?: string;
   expectedStartDate?: string; // ISO yyyy-MM-dd
+  serviceId?: number;
+  seenPriceVersionId?: number;
+  quantity?: number;
 }
 
 export interface RequestResponse {
@@ -116,6 +119,12 @@ export interface RequestResponse {
   routingStatus: 'ROUTED' | 'UNMAPPED' | 'NO_HOD' | null;
   assignmentDeadline: string | null;
   createdAt: string | null;
+  serviceId?: number | null;
+  serviceName?: string | null;
+  pricingMethod?: string | null;
+  snapshotAmount?: number | null;
+  snapshotCurrency?: string | null;
+  priceLabel?: string | null;
 }
 
 // Human-readable labels for the select inputs.
@@ -493,6 +502,15 @@ export interface CreateEventRequest {
   endsAt?: string;
   capacity?: number;
   published?: boolean;
+  feeKind?: 'FREE' | 'PAID';
+  feeAmount?: number;
+  feeCurrency?: string;
+  registrationOpensAt?: string;
+  registrationClosesAt?: string;
+  objectives?: string;
+  audience?: string;
+  prerequisites?: string;
+  contactEmail?: string;
 }
 
 export interface EventResponse {
@@ -507,6 +525,72 @@ export interface EventResponse {
   registeredCount: number;
   published: boolean;
   registered: boolean;
+  feeKind?: 'FREE' | 'PAID';
+  feeAmount?: number | null;
+  feeCurrency?: string | null;
+  objectives?: string | null;
+  audience?: string | null;
+  prerequisites?: string | null;
+  contactEmail?: string | null;
+  registrationStatus?: 'CONFIRMED' | 'AWAITING_PAYMENT' | 'CANCELLED' | null;
+  controlNumber?: string | null;
+}
+
+export interface CategoryOffer {
+  id: number;
+  code: string;
+  name: string;
+  description: string | null;
+  consultancyType: ConsultancyType;
+  displayOrder: number;
+  active: boolean;
+}
+
+export type PricingMethod = 'FIXED' | 'STARTING' | 'QUOTATION' | 'VARIABLE' | 'CUSTOM';
+
+export interface ServiceOffer {
+  id: number;
+  categoryId: number;
+  categoryName: string;
+  categoryCode: string;
+  consultancyType: ConsultancyType;
+  name: string;
+  description: string | null;
+  pricingMethod: PricingMethod;
+  amount: number | null;
+  currency: string;
+  unitLabel: string | null;
+  conditions: string | null;
+  priceVersionId: number | null;
+  customerLabel: string;
+  published: boolean;
+  active: boolean;
+}
+
+export interface PriceVersion {
+  id: number;
+  pricingMethod: PricingMethod;
+  amount: number | null;
+  currency: string;
+  unitLabel: string | null;
+  note: string | null;
+  changedBy: string;
+  changedAt: string;
+  customerLabel: string;
+}
+
+export interface TrainingPaymentRow {
+  id: number;
+  controlNumber: string;
+  registrationId: number;
+  eventId: number;
+  eventTitle: string;
+  registrantEmail: string;
+  amount: number;
+  currency: string;
+  status: string;
+  gepgReference: string | null;
+  paidAt: string | null;
 }
 
 export const TRAINING_MODES: { value: TrainingMode; label: string }[] = [

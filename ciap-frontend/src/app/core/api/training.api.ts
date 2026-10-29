@@ -3,7 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
-  ApiResponse, PageResponse, EventResponse, CreateEventRequest
+  ApiResponse, PageResponse, EventResponse, CreateEventRequest, TrainingPaymentRow
 } from '../models/api.models';
 
 @Injectable({ providedIn: 'root' })
@@ -32,11 +32,21 @@ export class TrainingApi {
     return this.http.post<ApiResponse<EventResponse>>(`${this.base}/${id}/publish`, {});
   }
 
-  register(id: number): Observable<ApiResponse<void>> {
-    return this.http.post<ApiResponse<void>>(`${this.base}/${id}/register`, {});
+  register(id: number): Observable<ApiResponse<EventResponse>> {
+    return this.http.post<ApiResponse<EventResponse>>(`${this.base}/${id}/register`, {});
   }
 
   cancel(id: number): Observable<ApiResponse<void>> {
     return this.http.post<ApiResponse<void>>(`${this.base}/${id}/cancel`, {});
+  }
+
+  pendingPayments(): Observable<ApiResponse<TrainingPaymentRow[]>> {
+    return this.http.get<ApiResponse<TrainingPaymentRow[]>>(`${this.base}/payments`);
+  }
+
+  confirmPayment(controlNumber: string, gepgReference: string, confirmationNote: string): Observable<ApiResponse<TrainingPaymentRow>> {
+    return this.http.post<ApiResponse<TrainingPaymentRow>>(`${this.base}/payments/confirm`, {
+      controlNumber, gepgReference, confirmationNote
+    });
   }
 }

@@ -17,6 +17,8 @@ import tz.go.tirdo.ciap.common.exception.BusinessException;
 import tz.go.tirdo.ciap.common.exception.ResourceNotFoundException;
 import tz.go.tirdo.ciap.domain.billing.PaymentRepository;
 import tz.go.tirdo.ciap.domain.billing.PaymentStatus;
+import tz.go.tirdo.ciap.domain.catalogue.CatalogueService;
+import tz.go.tirdo.ciap.domain.catalogue.PriceSnapshot;
 import tz.go.tirdo.ciap.domain.client.Client;
 import tz.go.tirdo.ciap.domain.client.ClientService;
 import tz.go.tirdo.ciap.domain.consultancy.dto.AssignDto;
@@ -67,6 +69,7 @@ public class ConsultancyRequestService {
     private final DepartmentRepository departmentRepository;
     private final RequestAssignmentRepository assignmentRepository;
     private final NotificationService notificationService;
+    private final CatalogueService catalogueService;
 
     public ConsultancyRequestService(ConsultancyRequestRepository repository,
                                      ClientService clientService,
@@ -78,7 +81,8 @@ public class ConsultancyRequestService {
                                      DepartmentService departmentService,
                                      DepartmentRepository departmentRepository,
                                      RequestAssignmentRepository assignmentRepository,
-                                     NotificationService notificationService) {
+                                     NotificationService notificationService,
+                                     CatalogueService catalogueService) {
         this.repository = repository;
         this.clientService = clientService;
         this.consultantService = consultantService;
@@ -90,6 +94,7 @@ public class ConsultancyRequestService {
         this.departmentRepository = departmentRepository;
         this.assignmentRepository = assignmentRepository;
         this.notificationService = notificationService;
+        this.catalogueService = catalogueService;
     }
 
     @Transactional
@@ -99,19 +104,32 @@ public class ConsultancyRequestService {
         if (actor.kind() == AccessGuard.Kind.CLIENT) {
             clientId = clientService.getByUserEmail(actor.email()).getId();
         }
+        PriceSnapshot price = dto.serviceId() == null
+                ? null
+                : catalogueService.confirm(dto.serviceId(), dto.seenPriceVersionId(), dto.quantity());
+        ConsultancyType type = price == null ? dto.consultancyType() : price.consultancyType();
         if (actor.kind() == AccessGuard.Kind.HOD) {
-            departmentService.assertHeadCanOpen(dto.consultancyType());
+            departmentService.assertHeadCanOpen(type);
         }
         Client client = clientService.getById(clientId);
         ConsultancyRequest request = ConsultancyRequest.builder()
                 .referenceNo(generateReference())
                 .client(client)
-                .consultancyType(dto.consultancyType())
+                .consultancyType(type)
                 .title(dto.title())
                 .description(dto.description())
                 .expectedStartDate(dto.expectedStartDate())
                 .status(RequestStatus.SUBMITTED)
                 .build();
+        if (price != null) {
+            request.setServiceId(price.serviceId());
+            request.setServiceName(price.serviceName());
+            request.setPricingMethod(price.pricingMethod());
+            request.setSnapshotAmount(price.amount());
+            request.setSnapshotCurrency(price.currency());
+            request.setPriceVersionId(price.priceVersionId());
+            request.setQuotedQuantity(price.quantity());
+        }
         departmentService.applyRoute(request);
         ConsultancyRequest saved = repository.save(request);
         requestAuditService.record(saved, null, RequestStatus.SUBMITTED, null);

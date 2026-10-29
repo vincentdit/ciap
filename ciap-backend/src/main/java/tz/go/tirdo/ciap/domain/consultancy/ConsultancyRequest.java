@@ -3,11 +3,13 @@ package tz.go.tirdo.ciap.domain.consultancy;
 import jakarta.persistence.*;
 import lombok.*;
 import tz.go.tirdo.ciap.common.audit.Auditable;
+import tz.go.tirdo.ciap.domain.catalogue.PricingMethod;
 import tz.go.tirdo.ciap.domain.client.Client;
 import tz.go.tirdo.ciap.domain.consultant.Consultant;
 import tz.go.tirdo.ciap.domain.department.Department;
 import tz.go.tirdo.ciap.domain.department.RoutingStatus;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Entity
@@ -67,6 +69,29 @@ public class ConsultancyRequest extends Auditable {
 
     @Column(name = "review_notes", columnDefinition = "TEXT")
     private String reviewNotes;
+
+    /** Service the customer selected. The price fields are a copy of what they confirmed. */
+    @Column(name = "service_id")
+    private Long serviceId;
+
+    @Column(name = "service_name", length = 200)
+    private String serviceName;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "pricing_method", length = 20)
+    private PricingMethod pricingMethod;
+
+    @Column(name = "snapshot_amount", precision = 15, scale = 2)
+    private BigDecimal snapshotAmount;
+
+    @Column(name = "snapshot_currency", length = 3)
+    private String snapshotCurrency;
+
+    @Column(name = "price_version_id")
+    private Long priceVersionId;
+
+    @Column(name = "quoted_quantity", precision = 12, scale = 2)
+    private BigDecimal quotedQuantity;
 
     @Version
     @Column(name = "lock_version", nullable = false)

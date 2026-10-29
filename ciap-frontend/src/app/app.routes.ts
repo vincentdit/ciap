@@ -25,6 +25,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/dashboard/dashboard.component').then(m => m.DashboardComponent)
       },
       {
+        path: 'services',
+        loadComponent: () => import('./features/catalogue/services.component').then(m => m.ServicesComponent)
+      },
+      {
         path: 'requests/new',
         loadComponent: () => import('./features/requests/new-request.component').then(m => m.NewRequestComponent)
       },
@@ -76,6 +80,11 @@ export const routes: Routes = [
         path: 'staff/consultants',
         canActivate: [staffGuard],
         loadComponent: () => import('./features/staff/consultants.component').then(m => m.ConsultantsComponent)
+      },
+      {
+        path: 'staff/catalogue',
+        canActivate: [adminGuard],
+        loadComponent: () => import('./features/catalogue/catalogue-admin.component').then(m => m.CatalogueAdminComponent)
       },
       {
         path: 'staff/users',

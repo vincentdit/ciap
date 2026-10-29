@@ -1,18 +1,19 @@
 import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { RequestApi } from '../../core/api/request.api';
 import { ClientApi } from '../../core/api/client.api';
 import { DepartmentApi } from '../../core/api/department.api';
 import { WorkflowApi } from '../../core/api/workflow.api';
+import { CatalogueApi } from '../../core/api/catalogue.api';
 import { AuthService } from '../../core/auth/auth.service';
-import { CONSULTANCY_TYPES, ClientResponse, CreateRequestDto, EligibleAssignee, RequestResponse } from '../../core/models/api.models';
+import { CONSULTANCY_TYPES, CategoryOffer, ClientResponse, CreateRequestDto, EligibleAssignee, RequestResponse, ServiceOffer } from '../../core/models/api.models';
 
 @Component({
   selector: 'app-new-request',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink],
   template: `
     <header class="page-head">
       <div>
@@ -81,6 +82,32 @@ import { CONSULTANCY_TYPES, ClientResponse, CreateRequestDto, EligibleAssignee, 
           }
 
           <div class="field">
+            <label for="department">Department *</label>
+            <select id="department" [disabled]="isHead()" [ngModel]="chosenDepartmentId()" [ngModelOptions]="{standalone: true}"
+                    (ngModelChange)="onDepartment($event)">
+              <option [ngValue]="null" disabled>Select a department…</option>
+              @for (department of catalogueDepartments(); track department.id) {
+                <option [ngValue]="department.id">{{ department.name }}</option>
+              }
+            </select>
+            <div class="hint">A request is opened in one department. Its services are listed only for that department.</div>
+          </div>
+
+          <div class="field">
+            <label for="service">Service</label>
+            <select id="service" [disabled]="!chosenDepartmentId()" [ngModel]="offer()?.id ?? null" [ngModelOptions]="{standalone: true}"
+                    (ngModelChange)="onService($event)">
+              <option [ngValue]="null">Describe the work without a catalogue service</option>
+              @for (service of departmentServices(); track service.id) {
+                <option [ngValue]="service.id">{{ service.name }}</option>
+              }
+            </select>
+            @if (chosenDepartmentId() && departmentServices().length === 0) {
+              <div class="hint">This department has no published services yet.</div>
+            }
+          </div>
+
+          <div class="field">
             <label for="consultancyType">Consultancy type *</label>
             <select id="consultancyType" formControlName="consultancyType" [class.invalid]="invalid('consultancyType')">
               <option value="" disabled>Select…</option>
@@ -89,8 +116,8 @@ import { CONSULTANCY_TYPES, ClientResponse, CreateRequestDto, EligibleAssignee, 
               }
             </select>
             @if (invalid('consultancyType')) { <div class="error-text">Please choose a type.</div> }
-            @if (isHead()) {
-              <div class="hint">This stays on your service line, so you can review it and assign a consultant.</div>
+            @if (chosenDepartmentId()) {
+              <div class="hint">This follows the department, so the request is reviewed there.</div>
             }
           </div>
 
@@ -125,6 +152,18 @@ import { CONSULTANCY_TYPES, ClientResponse, CreateRequestDto, EligibleAssignee, 
             <input id="expectedStartDate" type="date" formControlName="expectedStartDate">
           </div>
 
+          @if (offer(); as chosen) {
+            <div class="field price-box">
+              <label>Price for {{ chosen.name }}</label>
+              <p class="price">{{ chosen.customerLabel }}</p>
+              @if (chosen.pricingMethod === 'VARIABLE') {
+                <label for="quantity">Quantity ({{ chosen.unitLabel || 'units' }})</label>
+                <input id="quantity" type="number" min="0.01" step="0.01" formControlName="quantity">
+              }
+              @if (chosen.conditions) { <p class="hint">{{ chosen.conditions }}</p> }
+            </div>
+          }
+
           <button type="submit" class="btn btn-primary" [disabled]="loading()">
             @if (loading()) { <span class="spinner"></span> Submitting… }
             @else { Submit request }
@@ -141,6 +180,8 @@ import { CONSULTANCY_TYPES, ClientResponse, CreateRequestDto, EligibleAssignee, 
     .resolved { font-size: 1rem; font-weight: 600; color: var(--teal-800); padding: 0.4rem 0; }
     .success { padding: 1.8rem 2rem; max-width: 600px; }
     .success-actions { display: flex; gap: 0.8rem; }
+    .price-box { background: var(--teal-50); border-radius: 10px; padding: 0.9rem 1rem; }
+    .price { margin: 0.2rem 0 0.5rem; font-weight: 650; color: var(--teal-800); }
   `]
 })
 export class NewRequestComponent implements OnInit {
@@ -149,6 +190,8 @@ export class NewRequestComponent implements OnInit {
   private clientApi = inject(ClientApi);
   private departments = inject(DepartmentApi);
   private workflow = inject(WorkflowApi);
+  private catalogue = inject(CatalogueApi);
+  private route = inject(ActivatedRoute);
   private auth = inject(AuthService);
 
   protected types = CONSULTANCY_TYPES;
@@ -159,14 +202,29 @@ export class NewRequestComponent implements OnInit {
   protected clients = signal<ClientResponse[]>([]);
   protected assignees = signal<EligibleAssignee[]>([]);
   protected departmentName = signal('');
+  protected offer = signal<ServiceOffer | null>(null);
+  protected catalogueDepartments = signal<CategoryOffer[]>([]);
+  protected departmentServices = signal<ServiceOffer[]>([]);
+  protected chosenDepartmentId = signal<number | null>(null);
 
   // Client resolution: try clients/me; if it resolves we submit silently,
   // otherwise (staff with no client profile) fall back to a manual ID field.
   protected resolvedClientId = signal<number | null>(null);
   protected resolvedClientName = signal<string | null>(null);
   protected needsManualId = signal(false);
+  private headDepartmentCode = '';
+  private requestedServiceId = 0;
+  private pinnedService: ServiceOffer | null = null;
 
   ngOnInit(): void {
+    this.requestedServiceId = Number(this.route.snapshot.queryParamMap.get('service')) || 0;
+    this.catalogue.categories().subscribe({
+      next: (res) => {
+        this.catalogueDepartments.set(res.data);
+        this.alignDepartment();
+      },
+      error: () => this.error.set('Departments could not be loaded.')
+    });
     if (this.auth.hasAnyRole('HOD') && !this.auth.hasAnyRole('ADMIN')) {
       this.isHead.set(true);
       this.departments.list().subscribe({
@@ -174,10 +232,8 @@ export class NewRequestComponent implements OnInit {
           const department = res.data[0];
           if (!department) return;
           this.departmentName.set(department.name);
-          if (this.types.some(type => type.value === department.code)) {
-            this.form.controls.consultancyType.setValue(department.code);
-            this.form.controls.consultancyType.disable();
-          }
+          this.headDepartmentCode = department.code;
+          this.alignDepartment();
           this.departments.assignees(department.id).subscribe({
             next: (people) => this.assignees.set(people.data),
             error: () => this.error.set('Consultants in this department could not be loaded.')
@@ -210,8 +266,81 @@ export class NewRequestComponent implements OnInit {
     title: ['', [Validators.required]],
     description: [''],
     expectedStartDate: [''],
-    consultantId: [null as number | null]
+    consultantId: [null as number | null],
+    quantity: [null as number | null]
   });
+
+  onDepartment(id: number | null): void {
+    if (id == null) return;
+    const category = this.catalogueDepartments().find(row => row.id === id);
+    if (!category) return;
+    this.chosenDepartmentId.set(category.id);
+    if (this.pinnedService && this.pinnedService.categoryId !== category.id) {
+      this.pinnedService = null;
+    }
+    this.offer.set(this.pinnedService);
+    this.form.controls.consultancyType.setValue(category.consultancyType);
+    this.form.controls.consultancyType.disable();
+    this.catalogue.services(category.id).subscribe({
+      next: (res) => {
+        this.departmentServices.set(res.data);
+        if (this.pinnedService && res.data.some(row => row.id === this.pinnedService!.id)) {
+          this.offer.set(this.pinnedService);
+        }
+      },
+      error: () => this.error.set('Services in this department could not be loaded.')
+    });
+  }
+
+  onService(id: number | null): void {
+    const service = id == null ? null : this.departmentServices().find(row => row.id === id) ?? null;
+    this.pinnedService = service;
+    this.offer.set(service);
+    if (service && !this.form.controls.title.value) {
+      this.form.controls.title.setValue(service.name);
+    }
+  }
+
+  private alignDepartment(): void {
+    if (this.isHead() && this.headDepartmentCode && this.catalogueDepartments().length > 0) {
+      const line = this.catalogueDepartments().find(row =>
+        row.consultancyType === this.headDepartmentCode || row.code === this.headDepartmentCode);
+      if (line && this.chosenDepartmentId() !== line.id) {
+        this.onDepartment(line.id);
+      } else if (!line && this.types.some(type => type.value === this.headDepartmentCode)) {
+        this.form.controls.consultancyType.setValue(this.headDepartmentCode);
+        this.form.controls.consultancyType.disable();
+      }
+    }
+    if (this.isHead() && !this.headDepartmentCode) return;
+    if (this.requestedServiceId > 0 && this.catalogueDepartments().length > 0) {
+      const serviceId = this.requestedServiceId;
+      this.requestedServiceId = 0;
+      this.loadRequestedService(serviceId);
+    }
+  }
+
+  private loadRequestedService(serviceId: number): void {
+    this.catalogue.service(serviceId).subscribe({
+      next: (res) => {
+        const service = res.data;
+        const line = this.catalogueDepartments().find(row => row.id === service.categoryId);
+        if (this.isHead() && line && this.chosenDepartmentId() != null && line.id !== this.chosenDepartmentId()) {
+          this.error.set('That service belongs to another department.');
+          return;
+        }
+        this.pinnedService = service;
+        if (line && this.chosenDepartmentId() !== line.id) {
+          this.onDepartment(line.id);
+        }
+        this.offer.set(service);
+        this.form.controls.consultancyType.setValue(service.consultancyType);
+        this.form.controls.consultancyType.disable();
+        if (!this.form.controls.title.value) this.form.controls.title.setValue(service.name);
+      },
+      error: () => this.error.set('That service is not available.')
+    });
+  }
 
   invalid(name: string): boolean {
     const c = this.form.get(name);
@@ -232,12 +361,16 @@ export class NewRequestComponent implements OnInit {
     }
     this.loading.set(true);
     const raw = this.form.getRawValue();
+    const chosen = this.offer();
     const body: CreateRequestDto = {
       clientId,
-      consultancyType: raw.consultancyType as CreateRequestDto['consultancyType'],
+      consultancyType: (chosen?.consultancyType || raw.consultancyType) as CreateRequestDto['consultancyType'],
       title: raw.title,
       description: raw.description || undefined,
-      expectedStartDate: raw.expectedStartDate || undefined
+      expectedStartDate: raw.expectedStartDate || undefined,
+      serviceId: chosen?.id,
+      seenPriceVersionId: chosen?.priceVersionId ?? undefined,
+      quantity: chosen?.pricingMethod === 'VARIABLE' ? Number(raw.quantity) : undefined
     };
     this.api.submit(body).subscribe({
       next: (res) => {
@@ -260,7 +393,13 @@ export class NewRequestComponent implements OnInit {
         if (err?.status === 404) {
           this.error.set('No client found with that ID. Please check and try again.');
         } else if (err?.status === 422 || err?.status === 400) {
-          this.error.set(err?.error?.message || 'Please check the form and try again.');
+          const message = err?.error?.message || 'Please check the form and try again.';
+          this.error.set(message);
+          if (message.includes('The price changed') && this.offer()) {
+            this.catalogue.service(this.offer()!.id).subscribe({
+              next: (res) => this.offer.set(res.data)
+            });
+          }
         } else if (err?.status === 403) {
           this.error.set('You are not permitted to submit this request.');
         } else {
@@ -271,8 +410,21 @@ export class NewRequestComponent implements OnInit {
   }
 
   reset(): void {
-    this.form.reset({ clientId: null, consultancyType: '', title: '', description: '', expectedStartDate: '', consultantId: null });
+    this.form.reset({ clientId: null, consultancyType: '', title: '', description: '', expectedStartDate: '', consultantId: null, quantity: null });
     this.created.set(null);
     this.error.set(null);
+    this.offer.set(null);
+    this.pinnedService = null;
+    if (this.isHead() && this.chosenDepartmentId()) {
+      const category = this.catalogueDepartments().find(row => row.id === this.chosenDepartmentId());
+      if (category) {
+        this.form.controls.consultancyType.setValue(category.consultancyType);
+        this.form.controls.consultancyType.disable();
+      }
+      return;
+    }
+    this.chosenDepartmentId.set(null);
+    this.departmentServices.set([]);
+    this.form.controls.consultancyType.enable();
   }
 }

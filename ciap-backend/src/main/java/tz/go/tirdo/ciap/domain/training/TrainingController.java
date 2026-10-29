@@ -11,6 +11,7 @@ import tz.go.tirdo.ciap.common.dto.ApiResponse;
 import tz.go.tirdo.ciap.common.dto.PageResponse;
 import tz.go.tirdo.ciap.domain.training.dto.CreateEventRequest;
 import tz.go.tirdo.ciap.domain.training.dto.EventResponse;
+import tz.go.tirdo.ciap.domain.training.dto.TrainingPaymentResponse;
 
 @RestController
 @RequestMapping("/training")
@@ -26,9 +27,8 @@ public class TrainingController {
     @GetMapping
     public ResponseEntity<ApiResponse<PageResponse<EventResponse>>> listPublished(
             @RequestParam(required = false) String q, Pageable pageable, Authentication auth) {
-        Page<EventResponse> page = service.listPublished(q, pageable).map(e ->
-                EventResponse.from(e, service.registeredCount(e.getId()),
-                        service.isRegistered(e.getId(), auth.getName())));
+        Page<EventResponse> page = service.listPublished(q, pageable)
+                .map(e -> service.present(e, auth.getName()));
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(page)));
     }
 
@@ -36,17 +36,14 @@ public class TrainingController {
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<ApiResponse<PageResponse<EventResponse>>> listAll(
             @RequestParam(required = false) String q, Pageable pageable, Authentication auth) {
-        Page<EventResponse> page = service.listAll(q, pageable).map(e ->
-                EventResponse.from(e, service.registeredCount(e.getId()),
-                        service.isRegistered(e.getId(), auth.getName())));
+        Page<EventResponse> page = service.listAll(q, pageable)
+                .map(e -> service.present(e, auth.getName()));
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(page)));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<EventResponse>> get(@PathVariable Long id, Authentication auth) {
-        var e = service.getById(id);
-        return ResponseEntity.ok(ApiResponse.ok(
-                EventResponse.from(e, service.registeredCount(id), service.isRegistered(id, auth.getName()))));
+        return ResponseEntity.ok(ApiResponse.ok(service.present(service.getById(id), auth.getName())));
     }
 
     @PostMapping
@@ -54,8 +51,7 @@ public class TrainingController {
     public ResponseEntity<ApiResponse<EventResponse>> create(@Valid @RequestBody CreateEventRequest req,
                                                              Authentication auth) {
         var e = service.create(req);
-        return ResponseEntity.ok(ApiResponse.ok("Event created",
-                EventResponse.from(e, 0, false)));
+        return ResponseEntity.ok(ApiResponse.ok("Event created", service.present(e, auth.getName())));
     }
 
     @PutMapping("/{id}")
@@ -64,36 +60,45 @@ public class TrainingController {
                                                              @Valid @RequestBody CreateEventRequest req,
                                                              Authentication auth) {
         var e = service.update(id, req);
-        return ResponseEntity.ok(ApiResponse.ok("Event updated",
-                EventResponse.from(e, service.registeredCount(id), service.isRegistered(id, auth.getName()))));
+        return ResponseEntity.ok(ApiResponse.ok("Event updated", service.present(e, auth.getName())));
     }
 
     @PostMapping("/{id}/publish")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<ApiResponse<EventResponse>> publish(@PathVariable Long id, Authentication auth) {
         var e = service.setPublished(id, true);
-        return ResponseEntity.ok(ApiResponse.ok(
-                EventResponse.from(e, service.registeredCount(id), service.isRegistered(id, auth.getName()))));
+        return ResponseEntity.ok(ApiResponse.ok(service.present(e, auth.getName())));
     }
 
     @PostMapping("/{id}/unpublish")
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<ApiResponse<EventResponse>> unpublish(@PathVariable Long id, Authentication auth) {
         var e = service.setPublished(id, false);
-        return ResponseEntity.ok(ApiResponse.ok(
-                EventResponse.from(e, service.registeredCount(id), service.isRegistered(id, auth.getName()))));
+        return ResponseEntity.ok(ApiResponse.ok(service.present(e, auth.getName())));
     }
 
-    /** Register the current user for an event. */
     @PostMapping("/{id}/register")
-    public ResponseEntity<ApiResponse<Void>> register(@PathVariable Long id, Authentication auth) {
-        service.register(id, auth.getName());
-        return ResponseEntity.ok(ApiResponse.message("Registered"));
+    public ResponseEntity<ApiResponse<EventResponse>> register(@PathVariable Long id, Authentication auth) {
+        return ResponseEntity.ok(ApiResponse.ok("Registered", service.register(id, auth.getName())));
     }
 
     @PostMapping("/{id}/cancel")
     public ResponseEntity<ApiResponse<Void>> cancel(@PathVariable Long id, Authentication auth) {
         service.cancelRegistration(id, auth.getName());
         return ResponseEntity.ok(ApiResponse.message("Registration cancelled"));
+    }
+
+    @GetMapping("/payments")
+    @PreAuthorize("hasAnyRole('FINANCE','ADMIN')")
+    public ResponseEntity<ApiResponse<java.util.List<TrainingPaymentResponse>>> payments() {
+        return ResponseEntity.ok(ApiResponse.ok(service.pendingPayments()));
+    }
+
+    @PostMapping("/payments/confirm")
+    @PreAuthorize("hasAnyRole('FINANCE','ADMIN')")
+    public ResponseEntity<ApiResponse<TrainingPaymentResponse>> confirmPayment(
+            @Valid @RequestBody tz.go.tirdo.ciap.domain.billing.dto.GepgCallbackRequest req) {
+        return ResponseEntity.ok(ApiResponse.ok("Training payment recorded by Finance",
+                service.confirmPayment(req.controlNumber(), req.gepgReference(), req.confirmationNote())));
     }
 }

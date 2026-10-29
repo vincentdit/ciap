@@ -47,6 +47,8 @@ import { DocumentsPanelComponent } from './documents-panel.component';
               <dt>Client</dt><dd>{{ r.clientName }}</dd>
               <dt>Type</dt><dd>{{ typeLabel(r.consultancyType) }}</dd>
               <dt>Department</dt><dd>{{ r.departmentName || 'Not routed' }}</dd>
+              <dt>Service</dt><dd>{{ r.serviceName || '—' }}</dd>
+              <dt>Price shown</dt><dd>{{ r.priceLabel || '—' }}</dd>
               <dt>Expected start</dt><dd>{{ r.expectedStartDate || '—' }}</dd>
               <dt>Assigned consultant</dt><dd>{{ r.assignedConsultantName || '—' }}</dd>
               <dt>Assignment deadline</dt><dd>{{ r.assignmentDeadline || '—' }}</dd>

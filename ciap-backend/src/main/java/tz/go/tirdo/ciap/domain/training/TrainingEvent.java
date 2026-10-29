@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import tz.go.tirdo.ciap.common.audit.Auditable;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
@@ -47,4 +48,34 @@ public class TrainingEvent extends Auditable {
     @Column(nullable = false)
     @Builder.Default
     private boolean published = false;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "fee_kind", nullable = false, length = 10)
+    @Builder.Default
+    private FeeKind feeKind = FeeKind.FREE;
+
+    @Column(name = "fee_amount", precision = 15, scale = 2)
+    private BigDecimal feeAmount;
+
+    @Column(name = "fee_currency", nullable = false, length = 3)
+    @Builder.Default
+    private String feeCurrency = "TZS";
+
+    @Column(name = "registration_opens_at")
+    private Instant registrationOpensAt;
+
+    @Column(name = "registration_closes_at")
+    private Instant registrationClosesAt;
+
+    @Column(length = 1000)
+    private String objectives;
+
+    @Column(length = 500)
+    private String audience;
+
+    @Column(length = 500)
+    private String prerequisites;
+
+    @Column(name = "contact_email", length = 160)
+    private String contactEmail;
 }

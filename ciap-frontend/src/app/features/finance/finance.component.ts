@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { BillingApi } from '../../core/api/billing.api';
-import { FinancePayment, FinanceSummary, PaymentStatus } from '../../core/models/api.models';
+import { TrainingApi } from '../../core/api/training.api';
+import { FinancePayment, FinanceSummary, PaymentStatus, TrainingPaymentRow } from '../../core/models/api.models';
 import { ListSearchComponent, PagerComponent } from '../../shared/list-controls.component';
 
 @Component({
@@ -143,10 +144,36 @@ import { ListSearchComponent, PagerComponent } from '../../shared/list-controls.
         }
       </section>
     </div>
+
+    <section class="card panel training-fees">
+      <h3>Training registration fees</h3>
+      <p class="muted">These are separate from consultancy payments. Recording one confirms that registration. This desk does not call GePG.</p>
+      <div class="grid-2">
+        <label>Transaction reference <input [(ngModel)]="trainingReference" /></label>
+        <label>Reason <input [(ngModel)]="trainingReason" /></label>
+      </div>
+      @if (trainingPayments().length === 0) {
+        <p class="muted">No training fees are awaiting verification.</p>
+      } @else {
+        @for (row of trainingPayments(); track row.id) {
+          <div class="train-row">
+            <div>
+              <strong>{{ row.eventTitle }}</strong>
+              <div class="muted">{{ row.registrantEmail }} · {{ row.currency }} {{ row.amount }} · {{ row.controlNumber }}</div>
+            </div>
+            <button type="button" class="btn btn-primary sm"
+                    [disabled]="busy() || !trainingReference.trim() || !trainingReason.trim()"
+                    (click)="recordTraining(row)">Record payment</button>
+          </div>
+        }
+      }
+    </section>
   `,
   styles: [`
     .page-head { margin-bottom: 1.2rem; }
     .page-head h1 { font-size: 2rem; margin-bottom: 0.2rem; }
+    .training-fees { margin-top: 1.2rem; padding: 1rem 1.2rem; }
+    .train-row { display: flex; justify-content: space-between; gap: 1rem; align-items: center; padding: 0.6rem 0; border-top: 1px solid var(--line, #e6eeec); }
     .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.8rem; margin-bottom: 1rem; }
     .stat { text-align: left; cursor: pointer; padding: 0.9rem 1rem; }
     .stat-num { font-family: var(--font-display); font-size: 1.6rem; color: var(--teal-800); }
@@ -180,6 +207,7 @@ import { ListSearchComponent, PagerComponent } from '../../shared/list-controls.
 })
 export class FinanceComponent implements OnInit {
   private api = inject(BillingApi);
+  private trainingApi = inject(TrainingApi);
 
   protected summary = signal<FinanceSummary | null>(null);
   protected rows = signal<FinancePayment[]>([]);
@@ -205,6 +233,9 @@ export class FinanceComponent implements OnInit {
   protected reason = '';
   protected flagReason = '';
   protected armed = false;
+  protected trainingPayments = signal<TrainingPaymentRow[]>([]);
+  protected trainingReference = '';
+  protected trainingReason = '';
 
   ngOnInit(): void {
     this.api.summary().subscribe({
@@ -212,6 +243,7 @@ export class FinanceComponent implements OnInit {
       error: () => this.loadError.set('Finance totals could not be loaded.')
     });
     this.search(0);
+    this.loadTraining();
   }
 
   onQuery(q: string): void {
@@ -271,6 +303,30 @@ export class FinanceComponent implements OnInit {
     this.applyingCard = false;
     this.hint.set('Showing records where the payment and the request status do not agree. Totals are not changed.');
     this.search(0);
+  }
+
+  recordTraining(row: TrainingPaymentRow): void {
+    this.busy.set(true);
+    this.trainingApi.confirmPayment(row.controlNumber, this.trainingReference.trim(), this.trainingReason.trim()).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.actionMsg.set('Training payment recorded. The registration is confirmed.');
+        this.trainingReference = '';
+        this.trainingReason = '';
+        this.loadTraining();
+      },
+      error: (err) => {
+        this.busy.set(false);
+        this.actionErr.set(err?.error?.message || 'The training payment was not recorded.');
+      }
+    });
+  }
+
+  private loadTraining(): void {
+    this.trainingApi.pendingPayments().subscribe({
+      next: (res) => this.trainingPayments.set(res.data),
+      error: () => this.trainingPayments.set([])
+    });
   }
 
   showQuotedHint(): void {

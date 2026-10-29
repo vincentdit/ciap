@@ -52,6 +52,23 @@ import { ListSearchComponent, PagerComponent } from '../../shared/list-controls.
             <option [ngValue]="true">Publish</option>
           </select>
         </div>
+        @if (isAdmin()) {
+          <div class="grid-2">
+            <div class="field"><label>Registration</label>
+              <select [(ngModel)]="f.feeKind">
+                <option value="FREE">Free</option>
+                <option value="PAID">Paid</option>
+              </select>
+            </div>
+            @if (f.feeKind === 'PAID') {
+              <div class="field"><label>Fee</label><input type="number" min="0.01" step="0.01" [(ngModel)]="f.feeAmount" /></div>
+            }
+          </div>
+          @if (f.feeKind === 'PAID') {
+            <div class="field"><label>Currency</label><input maxlength="3" [(ngModel)]="f.feeCurrency" /></div>
+          }
+        }
+        <div class="field"><label>Learning objectives</label><textarea rows="2" [(ngModel)]="f.objectives"></textarea></div>
         <button class="btn btn-primary" [disabled]="busy() || !f.title.trim() || !startsLocal" (click)="create()">
           @if (busy()) { <span class="spinner"></span> Saving… } @else { Save event }
         </button>
@@ -73,6 +90,7 @@ import { ListSearchComponent, PagerComponent } from '../../shared/list-controls.
               </div>
               <h3>{{ e.title }}</h3>
               @if (e.description) { <p class="ev-desc">{{ e.description }}</p> }
+              <p class="price">{{ feeText(e) }}</p>
               <div class="ev-meta">
                 <span>{{ e.startsAt | date:'medium' }}</span>
                 @if (e.location) { <span>· {{ e.location }}</span> }
@@ -81,7 +99,8 @@ import { ListSearchComponent, PagerComponent } from '../../shared/list-controls.
             </div>
             <div class="ev-action">
               @if (e.registered) {
-                <span class="reg-tag">✓ Registered</span>
+                <span class="reg-tag">{{ e.registrationStatus === 'AWAITING_PAYMENT' ? 'Awaiting payment' : '✓ Registered' }}</span>
+                @if (e.controlNumber) { <span class="muted small">Control number {{ e.controlNumber }}</span> }
                 <button class="btn btn-ghost sm" [disabled]="busyId() === e.id" (click)="cancel(e)">Cancel</button>
               } @else {
                 <button class="btn btn-primary sm" [disabled]="busyId() === e.id || isFull(e)" (click)="register(e)">
@@ -117,6 +136,7 @@ import { ListSearchComponent, PagerComponent } from '../../shared/list-controls.
     .ev-action { display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; flex-shrink: 0; }
     .btn.sm { padding: 0.45rem 0.85rem; font-size: 0.85rem; }
     .reg-tag { font-size: 0.85rem; color: var(--teal-700); font-weight: 600; }
+    .price { font-weight: 650; color: var(--teal-800); margin: 0 0 0.45rem; }
     @media (max-width: 640px) { .ev-card { flex-direction: column; align-items: stretch; } .ev-action { align-items: stretch; } }
   `]
 })
@@ -133,7 +153,10 @@ export class TrainingComponent implements OnInit {
   protected err = signal<string | null>(null);
 
   protected modes = TRAINING_MODES;
-  protected f: CreateEventRequest = { title: '', description: '', mode: 'ONLINE', location: '', startsAt: '', capacity: 0, published: false };
+  protected f: CreateEventRequest = {
+    title: '', description: '', mode: 'ONLINE', location: '', startsAt: '', capacity: 0, published: false,
+    feeKind: 'FREE', feeCurrency: 'TZS'
+  };
   protected startsLocal = '';
   protected endsLocal = '';
   protected page = signal(0);
@@ -147,6 +170,11 @@ export class TrainingComponent implements OnInit {
   ngOnInit(): void { this.load(0); }
 
   canManage(): boolean { return this.auth.hasAnyRole('ADMIN', 'MANAGER'); }
+  isAdmin(): boolean { return this.auth.hasAnyRole('ADMIN'); }
+  feeText(e: EventResponse): string {
+    if (e.feeKind === 'PAID' && e.feeAmount) return 'Registration fee: ' + (e.feeCurrency || 'TZS') + ' ' + e.feeAmount;
+    return 'No registration fee';
+  }
   toggleForm(): void { this.showForm.set(!this.showForm()); }
   isFull(e: EventResponse): boolean { return e.capacity > 0 && e.registeredCount >= e.capacity; }
 
@@ -182,7 +210,15 @@ export class TrainingComponent implements OnInit {
     this.busyId.set(e.id);
     this.clear();
     this.api.register(e.id).subscribe({
-      next: () => { this.busyId.set(null); this.msg.set('Registered for ' + e.title + '.'); this.load(this.page()); },
+      next: (res) => {
+        this.busyId.set(null);
+        const row = res.data;
+        this.msg.set(row.registrationStatus === 'AWAITING_PAYMENT'
+          ? 'Registration received. Fee ' + (row.feeCurrency || 'TZS') + ' ' + row.feeAmount
+            + '. Control number ' + row.controlNumber + '. Finance must record the payment before it is confirmed.'
+          : 'Registered for ' + e.title + '. No registration fee.');
+        this.load(this.page());
+      },
       error: (er) => {
         this.busyId.set(null);
         this.err.set(er?.status === 422 ? (er?.error?.message || 'This event is full.')
@@ -225,7 +261,7 @@ export class TrainingComponent implements OnInit {
       next: () => {
         this.busy.set(false);
         this.msg.set('Event saved.');
-        this.f = { title: '', description: '', mode: 'ONLINE', location: '', startsAt: '', capacity: 0, published: false };
+        this.f = { title: '', description: '', mode: 'ONLINE', location: '', startsAt: '', capacity: 0, published: false, feeKind: 'FREE', feeCurrency: 'TZS' };
         this.startsLocal = ''; this.endsLocal = '';
         this.showForm.set(false);
         this.load(this.page());
