@@ -41,7 +41,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 
 /**
@@ -96,6 +98,9 @@ public class ConsultancyRequestService {
         AccessGuard.Actor actor = accessGuard.current();
         if (actor.kind() == AccessGuard.Kind.CLIENT) {
             clientId = clientService.getByUserEmail(actor.email()).getId();
+        }
+        if (actor.kind() == AccessGuard.Kind.HOD) {
+            departmentService.assertHeadCanOpen(dto.consultancyType());
         }
         Client client = clientService.getById(clientId);
         ConsultancyRequest request = ConsultancyRequest.builder()
@@ -157,22 +162,48 @@ public class ConsultancyRequestService {
         return present(r);
     }
 
+    private static final Set<RequestStatus> OPEN_FOR_ASSIGNMENT = EnumSet.of(
+            RequestStatus.SUBMITTED,
+            RequestStatus.UNDER_REVIEW,
+            RequestStatus.QUOTED,
+            RequestStatus.AWAITING_PAYMENT,
+            RequestStatus.PAID);
+
+    /**
+     * Names a consultant from the request's own department.
+     * Allowed from the moment the request is opened, through review and payment.
+     * The status becomes ASSIGNED only once the request is paid.
+     */
     @Transactional
     public RequestResponse assign(Long id, AssignDto dto) {
         ConsultancyRequest r = getEntity(id);
+        if (!OPEN_FOR_ASSIGNMENT.contains(r.getStatus())) {
+            throw new BusinessException(
+                    "A consultant can be named from the time the request is opened until it is paid");
+        }
         Consultant consultant = consultantService.getById(dto.consultantId());
         if (accessGuard.current().kind() != AccessGuard.Kind.ANONYMOUS) {
             assertDepartmentLead(r);
             departmentService.assertEligible(r, consultant);
         }
-        transition(r, RequestStatus.ASSIGNED);
-        r.setAssignedConsultant(consultant);
+        boolean samePerson = r.getAssignedConsultant() != null
+                && r.getAssignedConsultant().getId().equals(consultant.getId());
+        if (r.getStatus() == RequestStatus.PAID) {
+            transition(r, RequestStatus.ASSIGNED);
+        }
         if (dto.deadline() != null) {
             r.setAssignmentDeadline(dto.deadline());
         }
-        consultantService.incrementWorkload(consultant.getId());
-        rememberAssignment(r, consultant, null, trim(dto.note()), dto.deadline(), null);
-        notifyAssignee(r, consultant, "Request " + r.getReferenceNo() + " has been assigned to you.");
+        if (!samePerson) {
+            Consultant previous = r.getAssignedConsultant();
+            if (previous != null) {
+                consultantService.decrementWorkload(previous.getId());
+            }
+            r.setAssignedConsultant(consultant);
+            consultantService.incrementWorkload(consultant.getId());
+            rememberAssignment(r, consultant, previous, trim(dto.note()), dto.deadline(), null);
+            notifyAssignee(r, consultant, "Request " + r.getReferenceNo() + " has been assigned to you.");
+        }
         return present(r);
     }
 

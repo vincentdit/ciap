@@ -72,6 +72,24 @@ public class DepartmentService {
         this.accessGuard = accessGuard;
     }
 
+    /**
+     * A head may open a request only on the service line that routes to their department.
+     * Other callers are unchanged.
+     */
+    public void assertHeadCanOpen(ConsultancyType type) {
+        AccessGuard.Actor actor = accessGuard.current();
+        if (actor.kind() != AccessGuard.Kind.HOD) {
+            return;
+        }
+        Department mine = departmentRepository.findByHodUser_EmailIgnoreCase(actor.email())
+                .orElseThrow(() -> new BusinessException("You are not the head of a department"));
+        ServiceRoute route = routeRepository.findByConsultancyTypeAndActiveTrue(type).orElse(null);
+        if (route == null || route.getDepartment() == null
+                || !mine.getId().equals(route.getDepartment().getId())) {
+            throw new BusinessException("Open a request only for your own department");
+        }
+    }
+
     /** Attaches the request from its service line. Does not guess from the title or description. */
     public void applyRoute(ConsultancyRequest request) {
         ServiceRoute route = routeRepository.findByConsultancyTypeAndActiveTrue(request.getConsultancyType())
@@ -210,11 +228,22 @@ public class DepartmentService {
     }
 
     @Transactional(readOnly = true)
+    public List<EligibleAssigneeResponse> eligibleAssignees(Long departmentId) {
+        Department department = getActive(departmentId);
+        assertCanSeeDepartment(department);
+        return eligibleIn(department.getId());
+    }
+
+    @Transactional(readOnly = true)
     public List<EligibleAssigneeResponse> eligibleAssignees(ConsultancyRequest request) {
         if (request.getDepartment() == null) {
             return List.of();
         }
-        return memberRepository.findByDepartmentIdAndActiveTrue(request.getDepartment().getId()).stream()
+        return eligibleIn(request.getDepartment().getId());
+    }
+
+    private List<EligibleAssigneeResponse> eligibleIn(Long departmentId) {
+        return memberRepository.findByDepartmentIdAndActiveTrue(departmentId).stream()
                 .filter(DepartmentMember::isCanReceiveWork)
                 .map(DepartmentMember::getUser)
                 .filter(user -> user.isEnabled() && hasRole(user, RoleName.EXPERT))

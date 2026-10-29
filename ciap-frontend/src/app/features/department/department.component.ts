@@ -20,12 +20,13 @@ import { ListSearchComponent, PagerComponent } from '../../shared/list-controls.
         <h1>Department</h1>
         <p class="muted">
           @if (departmentName()) {
-            {{ departmentName() }} — review new requests and assign paid work to a member of this department.
+            {{ departmentName() }} — open a request and assign a consultant from this department. You can change that choice on each later action.
           } @else {
             Requests in your department.
           }
         </p>
       </div>
+      <a routerLink="/requests/new" class="btn btn-primary">+ New request</a>
     </header>
 
     @if (loadError()) { <div class="alert alert-error">{{ loadError() }}</div> }
@@ -121,7 +122,7 @@ import { ListSearchComponent, PagerComponent } from '../../shared/list-controls.
                 <td>{{ row.assignedConsultantName || '—' }}</td>
                 <td [class.late]="isOverdue(row)">{{ row.assignmentDeadline || '—' }}</td>
                 <td><span class="pill" [class]="pill(row.status)">{{ label(row.status) }}</span></td>
-                <td><a class="btn btn-ghost sm" [routerLink]="['/staff/requests', row.id]">Open</a></td>
+                <td><a class="btn btn-ghost sm" [routerLink]="['/staff/requests', row.id]">{{ actionLabel(row.status) }}</a></td>
               </tr>
             }
           </tbody>
@@ -131,8 +132,9 @@ import { ListSearchComponent, PagerComponent } from '../../shared/list-controls.
     </section>
   `,
   styles: [`
-    .page-head { margin-bottom: 1.4rem; }
+    .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; margin-bottom: 1.4rem; }
     .page-head h1 { margin-bottom: 0.2rem; }
+    .page-head p { margin: 0; max-width: 40rem; }
     .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.8rem; margin-bottom: 1rem; }
     .stat { text-align: left; cursor: pointer; border: 0; width: 100%; }
     .stat-num { font-size: 1.5rem; font-weight: 700; }
@@ -261,6 +263,12 @@ export class DepartmentComponent implements OnInit {
     if (!row.assignmentDeadline) return false;
     if (row.status !== 'ASSIGNED' && row.status !== 'IN_EXECUTION') return false;
     return row.assignmentDeadline < new Date().toISOString().slice(0, 10);
+  }
+
+  actionLabel(status: RequestStatus): string {
+    if (status === 'SUBMITTED' || status === 'UNDER_REVIEW') return 'Review & assign';
+    if (status === 'QUOTED' || status === 'AWAITING_PAYMENT' || status === 'PAID') return 'Assign';
+    return 'Open';
   }
 
   label(s: RequestStatus): string { return statusLabel(s); }

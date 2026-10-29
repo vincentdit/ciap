@@ -34,7 +34,7 @@ public class ConsultancyRequestController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('CLIENT','MANAGER','ADMIN')")
+    @PreAuthorize("hasAnyRole('CLIENT','HOD','MANAGER','ADMIN')")
     public ResponseEntity<ApiResponse<RequestResponse>> submit(@Valid @RequestBody CreateRequestDto dto) {
         return ResponseEntity.ok(ApiResponse.ok("Request submitted", service.submit(dto)));
     }

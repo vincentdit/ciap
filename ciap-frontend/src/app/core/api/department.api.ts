@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
-  ApiResponse, DepartmentMember, DepartmentQueueSummary, DepartmentSummary
+  ApiResponse, DepartmentMember, DepartmentQueueSummary, DepartmentSummary, EligibleAssignee
 } from '../models/api.models';
 
 @Injectable({ providedIn: 'root' })
@@ -30,5 +30,9 @@ export class DepartmentApi {
 
   members(departmentId: number): Observable<ApiResponse<DepartmentMember[]>> {
     return this.http.get<ApiResponse<DepartmentMember[]>>(`${this.base}/${departmentId}/members`);
+  }
+
+  assignees(departmentId: number): Observable<ApiResponse<EligibleAssignee[]>> {
+    return this.http.get<ApiResponse<EligibleAssignee[]>>(`${this.base}/${departmentId}/assignees`);
   }
 }

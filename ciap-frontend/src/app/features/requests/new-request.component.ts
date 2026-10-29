@@ -1,10 +1,13 @@
 import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { RequestApi } from '../../core/api/request.api';
 import { ClientApi } from '../../core/api/client.api';
-import { CONSULTANCY_TYPES, CreateRequestDto, RequestResponse } from '../../core/models/api.models';
+import { DepartmentApi } from '../../core/api/department.api';
+import { WorkflowApi } from '../../core/api/workflow.api';
+import { AuthService } from '../../core/auth/auth.service';
+import { CONSULTANCY_TYPES, ClientResponse, CreateRequestDto, EligibleAssignee, RequestResponse } from '../../core/models/api.models';
 
 @Component({
   selector: 'app-new-request',
@@ -14,19 +17,33 @@ import { CONSULTANCY_TYPES, CreateRequestDto, RequestResponse } from '../../core
     <header class="page-head">
       <div>
         <h1>New consultancy request</h1>
-        <p class="muted">Describe the engagement you'd like TIRDO to scope.</p>
+        <p class="muted">
+          @if (isHead()) {
+            Open a request for your department and assign a consultant from that department. You can change the consultant on each later action.
+          } @else {
+            Describe the engagement you'd like TIRDO to scope.
+          }
+        </p>
       </div>
       <a routerLink="/requests" class="btn btn-ghost">← Back to list</a>
     </header>
 
     @if (created()) {
       <div class="card success">
+        @if (error()) { <div class="alert alert-error">{{ error() }}</div> }
         <div class="alert alert-ok">
           Request submitted. Reference <strong>{{ created()!.referenceNo }}</strong>,
           status <strong>{{ created()!.status }}</strong>.
+          @if (created()!.assignedConsultantName) {
+            Assigned to <strong>{{ created()!.assignedConsultantName }}</strong>.
+          }
         </div>
         <div class="success-actions">
-          <a routerLink="/requests" class="btn btn-primary">View my requests</a>
+          @if (isHead()) {
+            <a [routerLink]="['/staff/requests', created()!.id]" class="btn btn-primary">Review this request</a>
+          } @else {
+            <a routerLink="/requests" class="btn btn-primary">View my requests</a>
+          }
           <button class="btn btn-ghost" (click)="reset()">Submit another</button>
         </div>
       </div>
@@ -35,7 +52,19 @@ import { CONSULTANCY_TYPES, CreateRequestDto, RequestResponse } from '../../core
         @if (error()) { <div class="alert alert-error">{{ error() }}</div> }
 
         <form [formGroup]="form" (ngSubmit)="submit()">
-          @if (resolvedClientName()) {
+          @if (isHead()) {
+            <div class="field">
+              <label for="clientId">Organisation *</label>
+              <select id="clientId" formControlName="clientId" [class.invalid]="invalid('clientId')">
+                <option [ngValue]="null" disabled>Select the client…</option>
+                @for (client of clients(); track client.id) {
+                  <option [ngValue]="client.id">{{ client.companyName }}</option>
+                }
+              </select>
+              @if (invalid('clientId')) { <div class="error-text">Choose the client organisation.</div> }
+              <div class="hint">Opened for {{ departmentName() || 'your department' }}.</div>
+            </div>
+          } @else if (resolvedClientName()) {
             <div class="field">
               <label>Organisation</label>
               <div class="resolved">{{ resolvedClientName() }}</div>
@@ -60,7 +89,23 @@ import { CONSULTANCY_TYPES, CreateRequestDto, RequestResponse } from '../../core
               }
             </select>
             @if (invalid('consultancyType')) { <div class="error-text">Please choose a type.</div> }
+            @if (isHead()) {
+              <div class="hint">This stays on your service line, so you can review it and assign a consultant.</div>
+            }
           </div>
+
+          @if (isHead()) {
+            <div class="field">
+              <label for="consultantId">Consultant from this department</label>
+              <select id="consultantId" formControlName="consultantId">
+                <option [ngValue]="null">Assign on a later action</option>
+                @for (person of assignees(); track person.consultantId) {
+                  <option [ngValue]="person.consultantId">{{ person.fullName }} — {{ person.category }}</option>
+                }
+              </select>
+              <div class="hint">Only an expert in {{ departmentName() || 'your department' }} can take this request.</div>
+            </div>
+          }
 
           <div class="field">
             <label for="title">Title *</label>
@@ -102,12 +147,18 @@ export class NewRequestComponent implements OnInit {
   private fb = inject(FormBuilder);
   private api = inject(RequestApi);
   private clientApi = inject(ClientApi);
-  private router = inject(Router);
+  private departments = inject(DepartmentApi);
+  private workflow = inject(WorkflowApi);
+  private auth = inject(AuthService);
 
   protected types = CONSULTANCY_TYPES;
   protected loading = signal(false);
   protected error = signal<string | null>(null);
   protected created = signal<RequestResponse | null>(null);
+  protected isHead = signal(false);
+  protected clients = signal<ClientResponse[]>([]);
+  protected assignees = signal<EligibleAssignee[]>([]);
+  protected departmentName = signal('');
 
   // Client resolution: try clients/me; if it resolves we submit silently,
   // otherwise (staff with no client profile) fall back to a manual ID field.
@@ -116,6 +167,29 @@ export class NewRequestComponent implements OnInit {
   protected needsManualId = signal(false);
 
   ngOnInit(): void {
+    if (this.auth.hasAnyRole('HOD') && !this.auth.hasAnyRole('ADMIN')) {
+      this.isHead.set(true);
+      this.departments.list().subscribe({
+        next: (res) => {
+          const department = res.data[0];
+          if (!department) return;
+          this.departmentName.set(department.name);
+          if (this.types.some(type => type.value === department.code)) {
+            this.form.controls.consultancyType.setValue(department.code);
+            this.form.controls.consultancyType.disable();
+          }
+          this.departments.assignees(department.id).subscribe({
+            next: (people) => this.assignees.set(people.data),
+            error: () => this.error.set('Consultants in this department could not be loaded.')
+          });
+        }
+      });
+      this.clientApi.list().subscribe({
+        next: (res) => this.clients.set(res.data.content),
+        error: () => this.error.set('Client organisations could not be loaded.')
+      });
+      return;
+    }
     this.clientApi.me().subscribe({
       next: (res) => {
         this.resolvedClientId.set(res.data.id);
@@ -135,7 +209,8 @@ export class NewRequestComponent implements OnInit {
     consultancyType: ['', [Validators.required]],
     title: ['', [Validators.required]],
     description: [''],
-    expectedStartDate: ['']
+    expectedStartDate: [''],
+    consultantId: [null as number | null]
   });
 
   invalid(name: string): boolean {
@@ -165,7 +240,21 @@ export class NewRequestComponent implements OnInit {
       expectedStartDate: raw.expectedStartDate || undefined
     };
     this.api.submit(body).subscribe({
-      next: (res) => { this.loading.set(false); this.created.set(res.data); },
+      next: (res) => {
+        if (this.isHead() && raw.consultantId) {
+          this.workflow.assign(res.data.id, { consultantId: raw.consultantId }).subscribe({
+            next: (assigned) => { this.loading.set(false); this.created.set(assigned.data); },
+            error: (err) => {
+              this.loading.set(false);
+              this.created.set(res.data);
+              this.error.set(err?.error?.message || 'The request was opened, but the consultant could not be assigned.');
+            }
+          });
+          return;
+        }
+        this.loading.set(false);
+        this.created.set(res.data);
+      },
       error: (err) => {
         this.loading.set(false);
         if (err?.status === 404) {
@@ -182,7 +271,7 @@ export class NewRequestComponent implements OnInit {
   }
 
   reset(): void {
-    this.form.reset({ clientId: null, consultancyType: '', title: '', description: '', expectedStartDate: '' });
+    this.form.reset({ clientId: null, consultancyType: '', title: '', description: '', expectedStartDate: '', consultantId: null });
     this.created.set(null);
     this.error.set(null);
   }

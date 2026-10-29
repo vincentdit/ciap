@@ -23,25 +23,29 @@ export function actionsFor(status: RequestStatus): WorkflowAction[] {
     case 'SUBMITTED':
       return [
         { action: 'start-review', label: 'Start review', roles: ['HOD', 'ADMIN'], kind: 'primary' },
+        { action: 'assign', label: 'Assign a consultant', roles: ['HOD', 'ADMIN'], kind: 'ghost', form: 'assign' },
         { action: 'cancel', label: 'Cancel', roles: ['CLIENT', 'MANAGER', 'ADMIN'], kind: 'danger' }
       ];
     case 'UNDER_REVIEW':
       return [
         { action: 'review', label: 'Complete review', roles: ['HOD', 'ADMIN'], kind: 'primary', form: 'review' },
+        { action: 'assign', label: 'Assign a consultant', roles: ['HOD', 'ADMIN'], kind: 'ghost', form: 'assign' },
         { action: 'cancel', label: 'Cancel', roles: ['CLIENT', 'MANAGER', 'ADMIN'], kind: 'danger' }
       ];
     case 'QUOTED':
       return [
         { action: 'await-payment', label: 'Issue control number', roles: ['MANAGER', 'ADMIN', 'FINANCE'], kind: 'primary' },
+        { action: 'assign', label: 'Assign a consultant', roles: ['HOD', 'ADMIN'], kind: 'ghost', form: 'assign' },
         { action: 'cancel', label: 'Cancel', roles: ['CLIENT', 'MANAGER', 'ADMIN'], kind: 'danger' }
       ];
     case 'AWAITING_PAYMENT':
       return [
+        { action: 'assign', label: 'Assign a consultant', roles: ['HOD', 'ADMIN'], kind: 'primary', form: 'assign' },
         { action: 'cancel', label: 'Cancel', roles: ['CLIENT', 'MANAGER', 'ADMIN'], kind: 'danger' }
       ];
     case 'PAID':
       return [
-        { action: 'assign', label: 'Assign to a staff member', roles: ['HOD', 'ADMIN'], kind: 'primary', form: 'assign' },
+        { action: 'assign', label: 'Assign a consultant', roles: ['HOD', 'ADMIN'], kind: 'primary', form: 'assign' },
         { action: 'cancel', label: 'Cancel', roles: ['MANAGER', 'ADMIN'], kind: 'danger' }
       ];
     case 'ASSIGNED':

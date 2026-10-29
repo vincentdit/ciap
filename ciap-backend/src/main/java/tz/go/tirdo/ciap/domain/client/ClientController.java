@@ -34,13 +34,13 @@ public class ClientController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','FINANCE','EXPERT')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','FINANCE','EXPERT','HOD')")
     public ResponseEntity<ApiResponse<ClientResponse>> get(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(ClientResponse.from(clientService.getById(id))));
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','FINANCE')")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER','FINANCE','HOD')")
     public ResponseEntity<ApiResponse<PageResponse<ClientResponse>>> list(Pageable pageable) {
         var page = clientService.list(pageable).map(ClientResponse::from);
         return ResponseEntity.ok(ApiResponse.ok(PageResponse.from(page)));

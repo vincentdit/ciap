@@ -13,9 +13,14 @@ import { RequestResponse, RequestStatus } from '../../core/models/api.models';
     <header class="page-head">
       <div>
         <h1>Welcome, {{ firstName() }}</h1>
-        <p class="muted">{{ isStaff() ? 'Organisation-wide consultancy overview.' : "Here's an overview of your consultancy activity." }}</p>
+        <p class="muted">{{ intro() }}</p>
       </div>
-      @if (isStaff()) {
+      @if (isDepartmentHead()) {
+        <div class="head-actions">
+          <a routerLink="/department" class="btn btn-ghost">Department</a>
+          <a routerLink="/requests/new" class="btn btn-primary">+ New request</a>
+        </div>
+      } @else if (isStaff()) {
         <a routerLink="/staff/requests" class="btn btn-primary">Open request queue</a>
       } @else {
         <a routerLink="/requests/new" class="btn btn-primary">+ New Request</a>
@@ -78,6 +83,7 @@ import { RequestResponse, RequestStatus } from '../../core/models/api.models';
     .page-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2rem; gap: 1rem; }
     .page-head h1 { font-size: 2rem; margin-bottom: 0.2rem; }
     .page-head p { margin: 0; font-size: 0.95rem; }
+    .head-actions { display: flex; gap: 0.6rem; align-items: center; }
 
     .load-card { padding: 2rem; color: var(--ink-faint); }
 
@@ -133,7 +139,20 @@ export class DashboardComponent implements OnInit {
   }
 
   isStaff(): boolean {
-    return this.auth.hasAnyRole('MANAGER', 'ADMIN', 'FINANCE', 'EXPERT');
+    return this.auth.hasAnyRole('MANAGER', 'ADMIN', 'FINANCE', 'EXPERT', 'HOD');
+  }
+
+  isDepartmentHead(): boolean {
+    return this.auth.hasAnyRole('HOD') && !this.auth.hasAnyRole('ADMIN');
+  }
+
+  intro(): string {
+    if (this.isDepartmentHead()) {
+      return 'Review requests in your department, open a new one, and assign a consultant from that department.';
+    }
+    return this.isStaff()
+      ? 'Organisation-wide consultancy overview.'
+      : "Here's an overview of your consultancy activity.";
   }
 
   openIfStaff(r: RequestResponse): void {

@@ -8,6 +8,7 @@ import tz.go.tirdo.ciap.common.dto.ApiResponse;
 import tz.go.tirdo.ciap.domain.department.dto.AddMemberRequest;
 import tz.go.tirdo.ciap.domain.department.dto.AppointHodRequest;
 import tz.go.tirdo.ciap.domain.department.dto.DepartmentMemberResponse;
+import tz.go.tirdo.ciap.domain.department.dto.EligibleAssigneeResponse;
 import tz.go.tirdo.ciap.domain.department.dto.DepartmentQueueSummary;
 import tz.go.tirdo.ciap.domain.department.dto.DepartmentResponse;
 
@@ -55,5 +56,11 @@ public class DepartmentController {
     @PreAuthorize("hasAnyRole('HOD','ADMIN')")
     public ResponseEntity<ApiResponse<List<DepartmentMemberResponse>>> members(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.ok(departmentService.members(id)));
+    }
+
+    @GetMapping("/{id}/assignees")
+    @PreAuthorize("hasAnyRole('HOD','ADMIN')")
+    public ResponseEntity<ApiResponse<List<EligibleAssigneeResponse>>> assignees(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.ok(departmentService.eligibleAssignees(id)));
     }
 }

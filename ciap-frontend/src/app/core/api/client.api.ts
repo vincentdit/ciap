@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { ApiResponse, ClientRegistrationRequest, ClientResponse } from '../models/api.models';
+import { ApiResponse, ClientRegistrationRequest, ClientResponse, PageResponse } from '../models/api.models';
 
 @Injectable({ providedIn: 'root' })
 export class ClientApi {
@@ -22,5 +22,10 @@ export class ClientApi {
   /** The client profile for the currently authenticated CLIENT user. */
   me(): Observable<ApiResponse<ClientResponse>> {
     return this.http.get<ApiResponse<ClientResponse>>(`${this.base}/me`);
+  }
+
+  list(page = 0, size = 100): Observable<ApiResponse<PageResponse<ClientResponse>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<ApiResponse<PageResponse<ClientResponse>>>(this.base, { params });
   }
 }

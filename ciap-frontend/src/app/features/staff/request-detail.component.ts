@@ -249,6 +249,8 @@ import { DocumentsPanelComponent } from './documents-panel.component';
                   </select>
                   @if (assignees().length === 0) {
                     <p class="hint">No eligible expert is active in this department.</p>
+                  } @else {
+                    <p class="hint">Only a consultant from this department can be assigned. You can change the choice on a later action.</p>
                   }
                   <textarea [(ngModel)]="assignNote" maxlength="500" placeholder="Instructions for the assignee"></textarea>
                   <input type="date" [(ngModel)]="assignDeadline" aria-label="Assignment deadline" />
@@ -591,7 +593,12 @@ export class RequestDetailComponent implements OnInit {
         this.request.set(res.data);
         this.openForm.set(null);
         this.busy.set(false);
-        this.actionMsg.set('Done. Status is now ' + statusLabel(res.data.status) + '.');
+        if (_name === 'assign' && res.data.status !== 'ASSIGNED') {
+          const who = res.data.assignedConsultantName || 'The consultant';
+          this.actionMsg.set(who + ' is assigned from this department. Review and payment continue.');
+        } else {
+          this.actionMsg.set('Done. Status is now ' + statusLabel(res.data.status) + '.');
+        }
         this.loadSideData();
       },
       error: (err) => { this.actionErr.set(this.errText(err)); this.busy.set(false); }

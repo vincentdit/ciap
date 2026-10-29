@@ -130,6 +130,17 @@ class DepartmentWorkflowTest {
         assertThat(submitted.routingStatus()).isEqualTo(RoutingStatus.ROUTED);
         assertThat(submitted.departmentId()).isEqualTo(industrial.getId());
 
+        as(hod.getEmail(), "HOD");
+        RequestResponse openedByHead = requestService.submit(new CreateRequestDto(
+                client.getId(), ConsultancyType.INDUSTRIAL, "Opened by the department head",
+                "The head records the engagement for this department.", null));
+        assertThat(openedByHead.departmentId()).isEqualTo(industrial.getId());
+        assertThat(openedByHead.status()).isEqualTo(RequestStatus.SUBMITTED);
+        assertThatThrownBy(() -> requestService.submit(new CreateRequestDto(
+                client.getId(), ConsultancyType.ENGINEERING, "Wrong department",
+                "This service line belongs to another department.", null)))
+                .isInstanceOf(BusinessException.class);
+
         as(otherHod.getEmail(), "HOD");
         assertThatThrownBy(() -> requestService.get(submitted.id()))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -143,8 +154,9 @@ class DepartmentWorkflowTest {
                 .extracting(row -> row.consultantId())
                 .contains(expert.getId(), second.getId())
                 .doesNotContain(outsider.getId());
-        assertThatThrownBy(() -> requestService.assign(submitted.id(), new AssignDto(expert.getId())))
-                .isInstanceOf(BusinessException.class);
+        RequestResponse namedEarly = requestService.assign(submitted.id(), new AssignDto(expert.getId()));
+        assertThat(namedEarly.status()).isEqualTo(RequestStatus.SUBMITTED);
+        assertThat(namedEarly.assignedConsultantName()).isEqualTo("Eng. Baraka Mushi");
 
         requestService.startReview(submitted.id());
         RequestResponse reviewed = requestService.review(submitted.id(),
