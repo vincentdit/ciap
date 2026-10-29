@@ -12,6 +12,7 @@ import tz.go.tirdo.ciap.security.AccessGuard;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class RequestAuditService {
@@ -49,6 +50,14 @@ public class RequestAuditService {
         if (actor.contains("@") && (clientEmail == null || !actor.equalsIgnoreCase(clientEmail))) {
             notificationService.schedule(actor, message);
         }
+    }
+
+    /** The status this request had immediately before it entered {@code current}. */
+    public Optional<RequestStatus> previousStatus(Long requestId, RequestStatus current) {
+        return eventRepository.findFirstByRequestIdAndToStatusOrderByIdDesc(requestId, current.name())
+                .map(RequestStatusEvent::getFromStatus)
+                .filter(status -> status != null && !status.isBlank())
+                .map(RequestStatus::valueOf);
     }
 
     @Transactional(readOnly = true)

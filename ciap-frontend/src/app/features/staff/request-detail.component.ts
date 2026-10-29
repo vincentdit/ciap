@@ -221,20 +221,33 @@ import { DocumentsPanelComponent } from './documents-panel.component';
               @if (a.form === 'review' && openForm() === 'review') {
                 <div class="inline-form">
                   <label class="radio">
-                    <input type="radio" name="approved" [value]="true" [(ngModel)]="reviewApproved" />
+                    <input type="radio" name="approved" [value]="true" [(ngModel)]="reviewApproved" (ngModelChange)="reviewArmed = false" />
                     Approve &amp; quote
                   </label>
                   <label class="radio">
-                    <input type="radio" name="approved" [value]="false" [(ngModel)]="reviewApproved" />
+                    <input type="radio" name="approved" [value]="false" [(ngModel)]="reviewApproved" (ngModelChange)="reviewArmed = false" />
                     Reject
                   </label>
-                  <textarea [(ngModel)]="reviewNotes" placeholder="Review notes"></textarea>
-                  @if (!reviewApproved && !reviewNotes.trim()) {
-                    <p class="hint">A rejection needs a reason.</p>
+                  <textarea [(ngModel)]="reviewNotes" placeholder="Reason"></textarea>
+                  @if (!reviewNotes.trim()) {
+                    <p class="hint">{{ reviewApproved ? 'An approval needs a reason.' : 'A rejection needs a reason.' }}</p>
+                  }
+                  @if (!reviewApproved && reviewArmed) {
+                    <p class="hint">Are you sure you want to reject this request?</p>
                   }
                   <div class="form-btns">
-                    <button class="btn btn-primary sm" [disabled]="busy() || (!reviewApproved && !reviewNotes.trim())" (click)="doReview(a)">Submit</button>
-                    <button class="btn btn-ghost sm" (click)="openForm.set(null)">Cancel</button>
+                    @if (!reviewApproved && !reviewArmed) {
+                      <button class="btn btn-danger sm" type="button" [disabled]="busy() || !reviewNotes.trim()"
+                              (click)="reviewArmed = true">Reject</button>
+                    } @else if (!reviewApproved && reviewArmed) {
+                      <button class="btn btn-danger sm" type="button" [disabled]="busy()" (click)="doReview(a)">Confirm rejection</button>
+                      <button class="btn btn-ghost sm" type="button" (click)="reviewArmed = false">Back</button>
+                    } @else {
+                      <button class="btn btn-primary sm" type="button" [disabled]="busy() || !reviewNotes.trim()" (click)="doReview(a)">Approve</button>
+                    }
+                    @if (reviewApproved || !reviewArmed) {
+                      <button class="btn btn-ghost sm" type="button" (click)="openForm.set(null)">Close</button>
+                    }
                   </div>
                 </div>
               }
@@ -269,6 +282,28 @@ import { DocumentsPanelComponent } from './documents-panel.component';
                       <button class="btn btn-ghost sm" type="button" (click)="assignArmed = false">Back</button>
                     </div>
                   }
+                </div>
+              }
+              @else if (a.action === 'cancel' && openForm() === 'cancel') {
+                <div class="inline-form">
+                  <p class="hint">Are you sure you want to cancel this request?</p>
+                  <textarea [(ngModel)]="cancelReason" maxlength="500" placeholder="Reason for cancellation"></textarea>
+                  @if (!cancelReason.trim()) { <p class="hint">A cancellation needs a reason.</p> }
+                  <div class="form-btns">
+                    <button class="btn btn-danger sm" type="button" [disabled]="busy() || !cancelReason.trim()" (click)="doCancel()">Confirm cancellation</button>
+                    <button class="btn btn-ghost sm" type="button" (click)="openForm.set(null)">Back</button>
+                  </div>
+                </div>
+              }
+              @else if (a.action === 'undo' && openForm() === 'undo') {
+                <div class="inline-form">
+                  <p class="hint">Are you sure you want to undo this and restore the previous step?</p>
+                  <textarea [(ngModel)]="undoReason" maxlength="500" placeholder="Reason for undoing"></textarea>
+                  @if (!undoReason.trim()) { <p class="hint">An undo needs a reason.</p> }
+                  <div class="form-btns">
+                    <button class="btn btn-primary sm" type="button" [disabled]="busy() || !undoReason.trim()" (click)="doUndo()">Confirm undo</button>
+                    <button class="btn btn-ghost sm" type="button" (click)="openForm.set(null)">Back</button>
+                  </div>
                 </div>
               }
               <!-- Plain button (or opener for a form) -->
@@ -386,11 +421,14 @@ export class RequestDetailComponent implements OnInit {
   protected assignments = signal<AssignmentRecord[]>([]);
   protected project = signal<{ id: number; projectCode: string; progressPercent: number } | null>(null);
 
-  protected openForm = signal<'review' | 'assign' | 'reassign' | null>(null);
+  protected openForm = signal<'review' | 'assign' | 'reassign' | 'cancel' | 'undo' | null>(null);
 
   // form models
   protected reviewApproved = true;
   protected reviewNotes = '';
+  protected reviewArmed = false;
+  protected cancelReason = '';
+  protected undoReason = '';
   protected selectedConsultant: number | null = null;
   protected assignNote = '';
   protected assignDeadline = '';
@@ -468,7 +506,9 @@ export class RequestDetailComponent implements OnInit {
 
   // ---- actions ----
   onAction(a: WorkflowAction): void {
-    if (a.form === 'review') { this.openForm.set('review'); return; }
+    if (a.form === 'review') { this.reviewArmed = false; this.openForm.set('review'); return; }
+    if (a.action === 'cancel') { this.cancelReason = ''; this.openForm.set('cancel'); return; }
+    if (a.action === 'undo') { this.undoReason = ''; this.openForm.set('undo'); return; }
     if (a.form === 'assign') { this.openForm.set('assign'); return; }
     if (a.action === 'await-payment') { this.issueControlNumber(); return; }
     this.run(a.action, () => this.callPlain(a.action));
@@ -493,14 +533,25 @@ export class RequestDetailComponent implements OnInit {
       case 'start-execution': return this.workflow.startExecution(this.id);
       case 'submit-report': return this.workflow.submitReport(this.id);
       case 'close': return this.workflow.close(this.id);
-      case 'cancel': return this.workflow.cancel(this.id);
+      case 'cancel': return this.workflow.cancel(this.id, this.cancelReason.trim());
       default: return this.workflow.startReview(this.id);
     }
   }
 
   doReview(_a: WorkflowAction): void {
+    if (!this.reviewNotes.trim()) return;
     this.run('review', () =>
-      this.workflow.review(this.id, { approved: this.reviewApproved, notes: this.reviewNotes || undefined }));
+      this.workflow.review(this.id, { approved: this.reviewApproved, notes: this.reviewNotes.trim() }));
+  }
+
+  doCancel(): void {
+    if (!this.cancelReason.trim()) return;
+    this.run('cancel', () => this.workflow.cancel(this.id, this.cancelReason.trim()));
+  }
+
+  doUndo(): void {
+    if (!this.undoReason.trim()) return;
+    this.run('undo', () => this.workflow.undo(this.id, this.undoReason.trim()));
   }
 
   doAssign(_a: WorkflowAction): void {

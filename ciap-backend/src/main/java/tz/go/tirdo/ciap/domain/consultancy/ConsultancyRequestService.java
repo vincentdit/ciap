@@ -149,12 +149,14 @@ public class ConsultancyRequestService {
     public RequestResponse review(Long id, ReviewDto dto) {
         ConsultancyRequest r = getEntity(id);
         assertDepartmentLead(r);
-        if (!dto.approved() && (dto.notes() == null || dto.notes().isBlank())) {
-            throw new BusinessException("A rejection needs a reason");
+        if (dto.notes() == null || dto.notes().isBlank()) {
+            throw new BusinessException(dto.approved()
+                    ? "An approval needs a reason"
+                    : "A rejection needs a reason");
         }
-        r.setReviewNotes(dto.notes());
-        String clientReason = dto.approved() ? null : dto.notes().trim();
-        transition(r, dto.approved() ? RequestStatus.QUOTED : RequestStatus.REJECTED, clientReason);
+        String reason = dto.notes().trim();
+        r.setReviewNotes(reason);
+        transition(r, dto.approved() ? RequestStatus.QUOTED : RequestStatus.REJECTED, reason);
         return present(r);
     }
 
@@ -312,15 +314,47 @@ public class ConsultancyRequestService {
     }
 
     @Transactional
-    public RequestResponse cancel(Long id) {
+    public RequestResponse cancel(Long id, String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException("A cancellation needs a reason");
+        }
         ConsultancyRequest r = getEntity(id);
         accessGuard.assertCanReadRequest(r);
         boolean hadConsultant = r.getAssignedConsultant() != null;
         Long consultantId = hadConsultant ? r.getAssignedConsultant().getId() : null;
-        transition(r, RequestStatus.CANCELLED);
+        transition(r, RequestStatus.CANCELLED, reason.trim());
         if (hadConsultant) {
             consultantService.decrementWorkload(consultantId);
         }
+        return present(r);
+    }
+
+    /**
+     * Restores the step a request had before it was rejected or cancelled.
+     * The reason is kept on the history so the reversal can be read later.
+     */
+    @Transactional
+    public RequestResponse undo(Long id, String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException("An undo needs a reason");
+        }
+        ConsultancyRequest r = getEntity(id);
+        accessGuard.assertCanReadRequest(r);
+        if (accessGuard.current().kind() == AccessGuard.Kind.HOD) {
+            assertDepartmentLead(r);
+        }
+        if (r.getStatus() != RequestStatus.REJECTED && r.getStatus() != RequestStatus.CANCELLED) {
+            throw new BusinessException("Only a rejected or cancelled request can be undone");
+        }
+        RequestStatus previous = requestAuditService.previousStatus(id, r.getStatus())
+                .filter(status -> !status.isTerminal())
+                .orElseThrow(() -> new BusinessException("This request has no earlier step to restore"));
+        RequestStatus from = r.getStatus();
+        if (from == RequestStatus.CANCELLED && r.getAssignedConsultant() != null) {
+            consultantService.incrementWorkload(r.getAssignedConsultant().getId());
+        }
+        r.setStatus(previous);
+        requestAuditService.record(r, from, previous, reason.trim());
         return present(r);
     }
 

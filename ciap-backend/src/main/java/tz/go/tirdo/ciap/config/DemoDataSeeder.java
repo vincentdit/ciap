@@ -305,7 +305,8 @@ public class DemoDataSeeder implements CommandLineRunner {
                     null));
             asHod(ConsultancyType.ENGINEERING, () -> {
                 requestService.startReview(postponed.id());
-                requestService.cancel(postponed.id());
+                requestService.cancel(postponed.id(),
+                        "The estate postponed the capital project to the next financial year.");
             });
         });
 

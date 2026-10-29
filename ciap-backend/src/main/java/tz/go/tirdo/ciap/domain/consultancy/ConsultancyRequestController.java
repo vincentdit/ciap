@@ -13,6 +13,7 @@ import tz.go.tirdo.ciap.domain.consultancy.dto.CreateRequestDto;
 import tz.go.tirdo.ciap.domain.consultancy.dto.ReassignDto;
 import tz.go.tirdo.ciap.domain.consultancy.dto.RequestEventResponse;
 import tz.go.tirdo.ciap.domain.consultancy.dto.RequestResponse;
+import tz.go.tirdo.ciap.domain.consultancy.dto.ReasonDto;
 import tz.go.tirdo.ciap.domain.consultancy.dto.ReviewDto;
 import tz.go.tirdo.ciap.domain.department.dto.AssignmentResponse;
 import tz.go.tirdo.ciap.domain.department.dto.EligibleAssigneeResponse;
@@ -141,8 +142,16 @@ public class ConsultancyRequestController {
     }
 
     @PostMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('CLIENT','MANAGER','ADMIN')")
-    public ResponseEntity<ApiResponse<RequestResponse>> cancel(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.ok("Request cancelled", service.cancel(id)));
+    @PreAuthorize("hasAnyRole('CLIENT','HOD','MANAGER','ADMIN')")
+    public ResponseEntity<ApiResponse<RequestResponse>> cancel(
+            @PathVariable Long id, @Valid @RequestBody ReasonDto dto) {
+        return ResponseEntity.ok(ApiResponse.ok("Request cancelled", service.cancel(id, dto.reason())));
+    }
+
+    @PostMapping("/{id}/undo")
+    @PreAuthorize("hasAnyRole('CLIENT','HOD','MANAGER','ADMIN')")
+    public ResponseEntity<ApiResponse<RequestResponse>> undo(
+            @PathVariable Long id, @Valid @RequestBody ReasonDto dto) {
+        return ResponseEntity.ok(ApiResponse.ok("Request restored", service.undo(id, dto.reason())));
     }
 }

@@ -24,5 +24,6 @@ export class WorkflowApi {
   startExecution(id: number) { return this.post<RequestResponse>(id, 'start-execution'); }
   submitReport(id: number) { return this.post<RequestResponse>(id, 'submit-report'); }
   close(id: number) { return this.post<RequestResponse>(id, 'close'); }
-  cancel(id: number) { return this.post<RequestResponse>(id, 'cancel'); }
+  cancel(id: number, reason: string) { return this.post<RequestResponse>(id, 'cancel', { reason }); }
+  undo(id: number, reason: string) { return this.post<RequestResponse>(id, 'undo', { reason }); }
 }

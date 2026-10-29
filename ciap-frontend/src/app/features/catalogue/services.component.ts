@@ -4,7 +4,7 @@ import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { CatalogueApi } from '../../core/api/catalogue.api';
 import { CategoryOffer, PricingMethod, ServiceOffer } from '../../core/models/api.models';
-import { ListSearchComponent } from '../../shared/list-controls.component';
+import { ListSearchComponent, PagerComponent } from '../../shared/list-controls.component';
 
 interface ServiceCard {
   category: CategoryOffer;
@@ -14,12 +14,18 @@ interface ServiceCard {
 @Component({
   selector: 'app-services',
   standalone: true,
-  imports: [CommonModule, RouterLink, ListSearchComponent],
+  imports: [CommonModule, RouterLink, ListSearchComponent, PagerComponent],
   template: `
     <header class="page-head">
       <div>
         <h1>Consultancy services</h1>
-        <p class="muted">Choose a department, review the price, then request the service.</p>
+        <p class="muted">
+          @if (groups().length === 1) {
+            Services in {{ groups()[0].category.name }}.
+          } @else {
+            Choose a department, review the price, then request the service.
+          }
+        </p>
       </div>
       @if (!loading() && totalServices() > 0) {
         <p class="count">{{ totalServices() }} {{ totalServices() === 1 ? 'service' : 'services' }}</p>
@@ -32,26 +38,28 @@ interface ServiceCard {
     } @else if (groups().length === 0) {
       <div class="card empty"><p>No consultancy services are published yet.</p></div>
     } @else {
-      <app-list-search placeholder="Service, department, or description" (queryChange)="query.set($event)" />
+      <app-list-search placeholder="Service, department, or description" (queryChange)="onQuery($event)" />
 
+      @if (groups().length > 1) {
       <div class="chips">
-        <button type="button" class="chip" [class.on]="departmentId() === null" (click)="departmentId.set(null)">
+        <button type="button" class="chip" [class.on]="departmentId() === null" (click)="pickDepartment(null)">
           All departments
         </button>
         @for (group of groups(); track group.category.id) {
           <button type="button" class="chip" [class.on]="departmentId() === group.category.id"
-                  (click)="departmentId.set(group.category.id)">
+                  (click)="pickDepartment(group.category.id)">
             {{ group.category.name }}
             <span class="chip-count">{{ group.services.length }}</span>
           </button>
         }
       </div>
+      }
 
       @if (visible().length === 0) {
-        <div class="card empty"><p>No services match this search.</p></div>
+        <div class="card empty"><p>{{ query() ? 'No services match this search.' : 'No services in this department.' }}</p></div>
       } @else {
         <div class="service-list">
-          @for (item of visible(); track item.service.id) {
+          @for (item of rows(); track item.service.id) {
             <article class="card offer">
               <div class="main">
                 <div class="head">
@@ -71,6 +79,7 @@ interface ServiceCard {
             </article>
           }
         </div>
+        <app-pager [page]="page()" [totalPages]="totalPages()" [total]="visible().length" (pageChange)="page.set($event)" />
       }
     }
   `,
@@ -144,6 +153,8 @@ export class ServicesComponent implements OnInit {
   protected error = signal<string | null>(null);
   protected query = signal('');
   protected departmentId = signal<number | null>(null);
+  protected page = signal(0);
+  private readonly size = 10;
 
   protected totalServices = computed(() =>
     this.groups().reduce((sum, group) => sum + group.services.length, 0));
@@ -163,6 +174,22 @@ export class ServicesComponent implements OnInit {
     }
     return cards;
   });
+
+  protected totalPages = computed(() => Math.max(1, Math.ceil(this.visible().length / this.size)));
+  protected rows = computed(() => {
+    const start = this.page() * this.size;
+    return this.visible().slice(start, start + this.size);
+  });
+
+  onQuery(value: string): void {
+    this.query.set(value);
+    this.page.set(0);
+  }
+
+  pickDepartment(id: number | null): void {
+    this.departmentId.set(id);
+    this.page.set(0);
+  }
 
   ngOnInit(): void {
     this.api.categories().subscribe({

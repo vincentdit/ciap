@@ -9,4 +9,5 @@ public interface DepartmentMemberRepository extends JpaRepository<DepartmentMemb
     Optional<DepartmentMember> findByDepartmentIdAndUserId(Long departmentId, Long userId);
     boolean existsByDepartmentIdAndUserId(Long departmentId, Long userId);
     List<DepartmentMember> findByDepartmentIdAndActiveTrue(Long departmentId);
+    List<DepartmentMember> findByUser_EmailIgnoreCaseAndActiveTrue(String email);
 }

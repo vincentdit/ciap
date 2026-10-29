@@ -12,6 +12,8 @@ import tz.go.tirdo.ciap.domain.catalogue.dto.PriceVersionResponse;
 import tz.go.tirdo.ciap.domain.catalogue.dto.SaveCategoryRequest;
 import tz.go.tirdo.ciap.domain.catalogue.dto.SaveServiceRequest;
 import tz.go.tirdo.ciap.domain.catalogue.dto.ServiceOfferResponse;
+import tz.go.tirdo.ciap.domain.consultancy.ConsultancyType;
+import tz.go.tirdo.ciap.domain.department.DepartmentService;
 import tz.go.tirdo.ciap.domain.notification.NotificationService;
 import tz.go.tirdo.ciap.domain.user.RoleName;
 import tz.go.tirdo.ciap.domain.user.UserRepository;
@@ -21,6 +23,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class CatalogueService {
@@ -31,26 +34,36 @@ public class CatalogueService {
     private final AccessGuard accessGuard;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final DepartmentService departmentService;
 
     public CatalogueService(ConsultancyCategoryRepository categoryRepository,
                             ServiceOfferingRepository serviceRepository,
                             ServicePriceVersionRepository versionRepository,
                             AccessGuard accessGuard,
                             UserRepository userRepository,
-                            NotificationService notificationService) {
+                            NotificationService notificationService,
+                            DepartmentService departmentService) {
         this.categoryRepository = categoryRepository;
         this.serviceRepository = serviceRepository;
         this.versionRepository = versionRepository;
         this.accessGuard = accessGuard;
         this.userRepository = userRepository;
         this.notificationService = notificationService;
+        this.departmentService = departmentService;
     }
 
     @Transactional(readOnly = true)
     public List<CategoryResponse> listCategories(boolean manage) {
-        List<ConsultancyCategory> rows = manage && accessGuard.isAdmin()
+        boolean unrestricted = manage && accessGuard.isAdmin();
+        List<ConsultancyCategory> rows = unrestricted
                 ? categoryRepository.findAllByOrderByDisplayOrderAscNameAsc()
                 : categoryRepository.findByActiveTrueOrderByDisplayOrderAscNameAsc();
+        if (!unrestricted) {
+            Set<ConsultancyType> lines = departmentService.visibleServiceLines();
+            if (lines != null) {
+                rows = rows.stream().filter(row -> lines.contains(row.getConsultancyType())).toList();
+            }
+        }
         return rows.stream().map(CategoryResponse::from).toList();
     }
 
@@ -97,6 +110,9 @@ public class CatalogueService {
     public List<ServiceOfferResponse> listServices(Long categoryId, boolean manage) {
         ConsultancyCategory category = category(categoryId);
         if (!manage || !accessGuard.isAdmin()) {
+            assertVisible(category);
+        }
+        if (!manage || !accessGuard.isAdmin()) {
             if (!category.isActive()) {
                 throw new ResourceNotFoundException("Consultancy category", categoryId);
             }
@@ -114,6 +130,9 @@ public class CatalogueService {
         boolean visible = service.isActive() && service.isPublished() && service.getCategory().isActive();
         if (!visible && !accessGuard.isAdmin()) {
             throw new ResourceNotFoundException("Consultancy service", id);
+        }
+        if (!accessGuard.isAdmin()) {
+            assertVisible(service.getCategory());
         }
         return ServiceOfferResponse.from(service, latestId(id));
     }
@@ -287,6 +306,13 @@ public class CatalogueService {
             throw new BusinessException("The price note is too long");
         }
         return new Priced(method, amount, currency, blankToNull(request.unitLabel()), blankToNull(request.conditions()));
+    }
+
+    private void assertVisible(ConsultancyCategory category) {
+        Set<ConsultancyType> lines = departmentService.visibleServiceLines();
+        if (lines != null && !lines.contains(category.getConsultancyType())) {
+            throw new ResourceNotFoundException("Consultancy category", category.getId());
+        }
     }
 
     private Long latestId(Long serviceId) {

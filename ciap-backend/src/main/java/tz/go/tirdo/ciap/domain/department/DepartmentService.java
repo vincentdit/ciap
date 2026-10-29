@@ -27,6 +27,8 @@ import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class DepartmentService {
@@ -70,6 +72,35 @@ public class DepartmentService {
         this.userRepository = userRepository;
         this.notificationService = notificationService;
         this.accessGuard = accessGuard;
+    }
+
+    /**
+     * Service lines this person may browse. Null means every department.
+     * A head sees the department they lead. An expert sees the department they belong to.
+     */
+    @Transactional(readOnly = true)
+    public Set<ConsultancyType> visibleServiceLines() {
+        AccessGuard.Actor actor = accessGuard.current();
+        if (actor.kind() != AccessGuard.Kind.HOD && actor.kind() != AccessGuard.Kind.EXPERT) {
+            return null;
+        }
+        List<Long> departmentIds = actor.kind() == AccessGuard.Kind.HOD
+                ? departmentRepository.findByHodUser_EmailIgnoreCase(actor.email())
+                    .filter(Department::isActive)
+                    .map(department -> List.of(department.getId()))
+                    .orElse(List.of())
+                : memberRepository.findByUser_EmailIgnoreCaseAndActiveTrue(actor.email()).stream()
+                    .map(DepartmentMember::getDepartment)
+                    .filter(department -> department != null && department.isActive())
+                    .map(Department::getId)
+                    .distinct()
+                    .toList();
+        if (departmentIds.isEmpty()) {
+            return Set.of();
+        }
+        return routeRepository.findByDepartment_IdInAndActiveTrue(departmentIds).stream()
+                .map(ServiceRoute::getConsultancyType)
+                .collect(Collectors.toSet());
     }
 
     /**

@@ -16,6 +16,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import tz.go.tirdo.ciap.common.exception.BusinessException;
 import tz.go.tirdo.ciap.common.exception.ResourceNotFoundException;
 import tz.go.tirdo.ciap.domain.billing.BillingService;
+import tz.go.tirdo.ciap.domain.catalogue.CatalogueService;
+import tz.go.tirdo.ciap.domain.catalogue.dto.CategoryResponse;
 import tz.go.tirdo.ciap.domain.billing.QuotationService;
 import tz.go.tirdo.ciap.domain.billing.dto.CreateQuotationRequest;
 import tz.go.tirdo.ciap.domain.billing.dto.QuotationItemDto;
@@ -25,6 +27,7 @@ import tz.go.tirdo.ciap.domain.client.ClientType;
 import tz.go.tirdo.ciap.domain.client.IndustryCategory;
 import tz.go.tirdo.ciap.domain.client.dto.ClientRegistrationRequest;
 import tz.go.tirdo.ciap.domain.consultancy.ConsultancyRequestService;
+import tz.go.tirdo.ciap.domain.consultancy.RequestAuditService;
 import tz.go.tirdo.ciap.domain.consultancy.ConsultancyType;
 import tz.go.tirdo.ciap.domain.consultancy.RequestStatus;
 import tz.go.tirdo.ciap.domain.consultancy.dto.AssignDto;
@@ -67,10 +70,12 @@ class DepartmentWorkflowTest {
     @Autowired UserService userService;
     @Autowired ConsultantService consultantService;
     @Autowired ConsultancyRequestService requestService;
+    @Autowired RequestAuditService requestAuditService;
     @Autowired QuotationService quotationService;
     @Autowired BillingService billingService;
     @Autowired DepartmentRepository departmentRepository;
     @Autowired DepartmentService departmentService;
+    @Autowired CatalogueService catalogueService;
     @Autowired ServiceRouteRepository routeRepository;
 
     @AfterEach
@@ -245,6 +250,114 @@ class DepartmentWorkflowTest {
                                 {"controlNumber":"123456789012","gepgReference":"X","confirmationNote":"slip"}
                                 """))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("a rejection or cancellation needs a reason and can be undone")
+    void rejectAndCancelCanBeUndone() {
+        String stamp = String.valueOf(System.nanoTime());
+        Department industrial = department("Industrial undo " + stamp, "UND-" + stamp);
+        route(ConsultancyType.INDUSTRIAL, industrial);
+        User hod = userService.createUser("hodundo." + stamp + "@test.local", "Staff@12345",
+                "Amina Selemani", null, java.util.Set.of(RoleName.HOD));
+        departmentService.appointHod(industrial.getId(), hod.getId());
+        Client client = clientService.register(new ClientRegistrationRequest(
+                "Undo Client " + stamp, "8" + stamp.substring(0, 8),
+                ClientType.SME, IndustryCategory.AGRO_PROCESSING,
+                "Desk", "+255700000002", "undoclient." + stamp + "@test.local",
+                "Client@12345", "Dar es Salaam", "Ilala", "Tanzania"));
+
+        as(client.getEmail(), "CLIENT");
+        RequestResponse submitted = requestService.submit(new CreateRequestDto(
+                client.getId(), ConsultancyType.INDUSTRIAL, "Undo sample",
+                "A request used to check reversal.", null));
+
+        as(hod.getEmail(), "HOD");
+        requestService.startReview(submitted.id());
+        assertThatThrownBy(() -> requestService.review(submitted.id(), new ReviewDto(true, " ")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("approval needs a reason");
+        assertThatThrownBy(() -> requestService.review(submitted.id(), new ReviewDto(false, " ")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("rejection needs a reason");
+
+        RequestResponse rejected = requestService.review(submitted.id(),
+                new ReviewDto(false, "Outside the laboratory scope."));
+        assertThat(rejected.status()).isEqualTo(RequestStatus.REJECTED);
+
+        assertThatThrownBy(() -> requestService.undo(submitted.id(), " "))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("undo needs a reason");
+        RequestResponse restored = requestService.undo(submitted.id(), "The client clarified the sample list.");
+        assertThat(restored.status()).isEqualTo(RequestStatus.UNDER_REVIEW);
+
+        assertThatThrownBy(() -> requestService.cancel(submitted.id(), " "))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("cancellation needs a reason");
+        RequestResponse cancelled = requestService.cancel(submitted.id(), "The client withdrew the samples.");
+        assertThat(cancelled.status()).isEqualTo(RequestStatus.CANCELLED);
+
+        RequestResponse back = requestService.undo(submitted.id(), "The withdrawal was sent by mistake.");
+        assertThat(back.status()).isEqualTo(RequestStatus.UNDER_REVIEW);
+
+        assertThat(requestAuditService.list(submitted.id()))
+                .extracting(event -> event.reason())
+                .contains(
+                        "Outside the laboratory scope.",
+                        "The client clarified the sample list.",
+                        "The client withdrew the samples.",
+                        "The withdrawal was sent by mistake.");
+    }
+
+    @Test
+    @DisplayName("a head and an expert see only their own department's services")
+    void consultancyServicesStayInsideTheDepartment() {
+        String stamp = String.valueOf(System.nanoTime());
+        Department ict = department("ICT services " + stamp, "ICT-" + stamp);
+        Department industrial = department("Industrial services " + stamp, "LAB-" + stamp);
+        route(ConsultancyType.ICT, ict);
+        route(ConsultancyType.INDUSTRIAL, industrial);
+
+        User hod = userService.createUser("hodview." + stamp + "@test.local", "Staff@12345",
+                "Grace Mushi", null, java.util.Set.of(RoleName.HOD));
+        User expertUser = userService.createUser("expertview." + stamp + "@test.local", "Staff@12345",
+                "Daniel Shao", null, java.util.Set.of(RoleName.EXPERT));
+        User otherExpert = userService.createUser("otherview." + stamp + "@test.local", "Staff@12345",
+                "Dr. Rehema Lyimo", null, java.util.Set.of(RoleName.EXPERT));
+        User manager = userService.createUser("managerview." + stamp + "@test.local", "Staff@12345",
+                "Neema Juma", null, java.util.Set.of(RoleName.MANAGER));
+        departmentService.appointHod(ict.getId(), hod.getId());
+        departmentService.addMember(ict.getId(), expertUser.getId(), true);
+        departmentService.addMember(industrial.getId(), otherExpert.getId(), true);
+
+        SecurityContextHolder.clearContext();
+        Long industrialCategoryId = catalogueService.listCategories(false).stream()
+                .filter(row -> row.consultancyType() == ConsultancyType.INDUSTRIAL)
+                .map(CategoryResponse::id)
+                .findFirst()
+                .orElseThrow();
+
+        as(hod.getEmail(), "HOD");
+        assertThat(catalogueService.listCategories(false))
+                .extracting(CategoryResponse::consultancyType)
+                .containsExactly(ConsultancyType.ICT);
+        assertThatThrownBy(() -> catalogueService.listServices(industrialCategoryId, false))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        as(expertUser.getEmail(), "EXPERT");
+        assertThat(catalogueService.listCategories(false))
+                .extracting(CategoryResponse::consultancyType)
+                .containsExactly(ConsultancyType.ICT);
+
+        as(otherExpert.getEmail(), "EXPERT");
+        assertThat(catalogueService.listCategories(false))
+                .extracting(CategoryResponse::consultancyType)
+                .containsExactly(ConsultancyType.INDUSTRIAL);
+
+        as(manager.getEmail(), "MANAGER");
+        assertThat(catalogueService.listCategories(false))
+                .extracting(CategoryResponse::consultancyType)
+                .contains(ConsultancyType.ICT, ConsultancyType.INDUSTRIAL, ConsultancyType.ENGINEERING);
     }
 
     private void pay(Long requestId, String reference) {

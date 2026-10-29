@@ -24,46 +24,51 @@ export function actionsFor(status: RequestStatus): WorkflowAction[] {
       return [
         { action: 'start-review', label: 'Start review', roles: ['HOD', 'ADMIN'], kind: 'primary' },
         { action: 'assign', label: 'Assign a consultant', roles: ['HOD', 'ADMIN'], kind: 'ghost', form: 'assign' },
-        { action: 'cancel', label: 'Cancel', roles: ['CLIENT', 'MANAGER', 'ADMIN'], kind: 'danger' }
+        { action: 'cancel', label: 'Cancel', roles: ['CLIENT', 'HOD', 'MANAGER', 'ADMIN'], kind: 'danger' }
       ];
     case 'UNDER_REVIEW':
       return [
         { action: 'review', label: 'Complete review', roles: ['HOD', 'ADMIN'], kind: 'primary', form: 'review' },
         { action: 'assign', label: 'Assign a consultant', roles: ['HOD', 'ADMIN'], kind: 'ghost', form: 'assign' },
-        { action: 'cancel', label: 'Cancel', roles: ['CLIENT', 'MANAGER', 'ADMIN'], kind: 'danger' }
+        { action: 'cancel', label: 'Cancel', roles: ['CLIENT', 'HOD', 'MANAGER', 'ADMIN'], kind: 'danger' }
       ];
     case 'QUOTED':
       return [
         { action: 'await-payment', label: 'Issue control number', roles: ['MANAGER', 'ADMIN', 'FINANCE'], kind: 'primary' },
         { action: 'assign', label: 'Assign a consultant', roles: ['HOD', 'ADMIN'], kind: 'ghost', form: 'assign' },
-        { action: 'cancel', label: 'Cancel', roles: ['CLIENT', 'MANAGER', 'ADMIN'], kind: 'danger' }
+        { action: 'cancel', label: 'Cancel', roles: ['CLIENT', 'HOD', 'MANAGER', 'ADMIN'], kind: 'danger' }
       ];
     case 'AWAITING_PAYMENT':
       return [
         { action: 'assign', label: 'Assign a consultant', roles: ['HOD', 'ADMIN'], kind: 'primary', form: 'assign' },
-        { action: 'cancel', label: 'Cancel', roles: ['CLIENT', 'MANAGER', 'ADMIN'], kind: 'danger' }
+        { action: 'cancel', label: 'Cancel', roles: ['CLIENT', 'HOD', 'MANAGER', 'ADMIN'], kind: 'danger' }
       ];
     case 'PAID':
       return [
         { action: 'assign', label: 'Assign a consultant', roles: ['HOD', 'ADMIN'], kind: 'primary', form: 'assign' },
-        { action: 'cancel', label: 'Cancel', roles: ['MANAGER', 'ADMIN'], kind: 'danger' }
+        { action: 'cancel', label: 'Cancel', roles: ['HOD', 'MANAGER', 'ADMIN'], kind: 'danger' }
       ];
     case 'ASSIGNED':
       return [
         { action: 'start-execution', label: 'Start execution', roles: ['EXPERT', 'MANAGER', 'ADMIN'], kind: 'primary' },
-        { action: 'cancel', label: 'Cancel', roles: ['MANAGER', 'ADMIN'], kind: 'danger' }
+        { action: 'cancel', label: 'Cancel', roles: ['HOD', 'MANAGER', 'ADMIN'], kind: 'danger' }
       ];
     case 'IN_EXECUTION':
       return [
         { action: 'submit-report', label: 'Submit report', roles: ['EXPERT', 'MANAGER', 'ADMIN'], kind: 'primary' },
-        { action: 'cancel', label: 'Cancel', roles: ['MANAGER', 'ADMIN'], kind: 'danger' }
+        { action: 'cancel', label: 'Cancel', roles: ['HOD', 'MANAGER', 'ADMIN'], kind: 'danger' }
       ];
     case 'REPORT_SUBMITTED':
       return [
         { action: 'close', label: 'Close engagement', roles: ['MANAGER', 'ADMIN'], kind: 'primary' }
       ];
+    case 'REJECTED':
+    case 'CANCELLED':
+      return [
+        { action: 'undo', label: 'Undo', roles: ['CLIENT', 'HOD', 'MANAGER', 'ADMIN'], kind: 'ghost' }
+      ];
     default:
-      return []; // CLOSED, REJECTED, CANCELLED — terminal
+      return [];
   }
 }
 
